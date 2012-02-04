@@ -13,7 +13,7 @@ typedef struct {
 	void *pool;
 } mempool_instance;
 
-void *mempool_init(mempool_instance *, unsigned int, unsigned int);
+void mempool_init(mempool_instance *, unsigned int, unsigned int);
 void *mempool_alloc(mempool_instance *);
 void mempool_free(mempool_instance *, void *);
 void mempool_destroy(mempool_instance *);

@@ -30,7 +30,6 @@ typedef struct {
 
 typedef struct {
 	int epoll_iface;
-	int events_max;
 } uqueue;
 
 #define UQUEUE_READ_EVENT	EPOLLIN

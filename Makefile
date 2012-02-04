@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-Wall -O3
+CFLAGS=-Wall -g
 INCLUDE=-I.
 
 SRC= \

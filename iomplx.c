@@ -64,12 +64,12 @@ void iomplx_callbacks_init(iomplx_item *item)
 
 static void iomplx_work_init(iomplx_work *work, unsigned int actions_number)
 {
-	DLIST_INIT(&work->actions_list);
+	DLIST_INIT(work);
 	mempool_init(&work->actions_pool, sizeof(iomplx_action), actions_number);
 	work->actions_count = 0;
 }
 
-static int iomplx_work_action_add(iomplx_work *work, iomplx_item *item, unsigned char action_idx)
+static int iomplx_work_action_add(iomplx_work *work, iomplx_item *item, unsigned char call_idx)
 {
 	iomplx_action *action;
 
@@ -77,14 +77,18 @@ static int iomplx_work_action_add(iomplx_work *work, iomplx_item *item, unsigned
 	if(!action)
 		return -1;
 
-	DLIST_APPEND(&work->actions_list, action_idx);
+	action->call_idx = call_idx;
+	action->item = item;
+
+	DLIST_APPEND(work, action);
 	work->actions_count++;
+
 	return 0;
 }
 
 static void iomplx_work_action_del(iomplx_work *work, iomplx_action *action)
 {
-	DLIST_DEL(&work->actions_list, action);
+	DLIST_DEL(work, action);
 	mempool_free(&work->actions_pool, action);
 	work->actions_count--;
 }
@@ -92,7 +96,7 @@ static void iomplx_work_action_del(iomplx_work *work, iomplx_action *action)
 static void iomplx_work_populate(iomplx_work *work, uqueue *q)
 {
 	int timeout;
-	unsigned int rmg;
+	int rmg;
 	iomplx_event ev;
 
 	if(work->actions_count >= IOMPLX_WORK_ACTIONS)
@@ -100,12 +104,12 @@ static void iomplx_work_populate(iomplx_work *work, uqueue *q)
 
 	iomplx_event_init(&ev);
 	timeout = work->actions_count == 0? -1 : 0;
-
-	q->max_events = EVENTS - work->actions_count;
+	ev.max_events = EVENTS - work->actions_count;
 	do {
 		rmg = uqueue_event_get(q, &ev, timeout);
-		iomplx_work_action_add(work, ev.item, ev.type);
-	} while(rmg != 0);
+		if(rmg != -1)
+			iomplx_work_action_add(work, ev.item, ev.type);
+	} while(rmg > 0);
 }
 
 static void iomplx_do_maintenance(iomplx_instance *mplx, unsigned long *start_time)
@@ -138,12 +142,12 @@ static void iomplx_thread_0(iomplx_instance *mplx)
 
 	iomplx_event_init(&ev);
 	do {
-		if(uqueue_event_get(&mplx->accept_queue, &ev, mplx->monitor.timeout_granularity) != -1) {
+		if(uqueue_event_get(&mplx->accept_uqueue, &ev, mplx->monitor.timeout_granularity) != -1) {
 
 			iomplx_callbacks_init(&local_item);
 			local_item.new_filter = IOMPLX_READ;
-			local_item.oneshot = 1;
 			local_item.sa_size = ev.item->sa_size;
+			local_item.oneshot = 1;
 			local_item.fd = accept_and_set(ev.item->fd, &local_item.sa, &local_item.sa_size);
 
 			if(local_item.fd != -1) {
@@ -170,22 +174,21 @@ static void iomplx_thread_n(iomplx_instance *mplx)
 		mplx->thread_init();
 
 	iomplx_work_init(&work, IOMPLX_WORK_ACTIONS);
-	iomplx_event_init(&ev);
 
 	do {
-		iomplx_work_populate(&work, &mplx->n_queue);
+		iomplx_work_populate(&work, &mplx->n_uqueue);
 
-		DLIST_FOREACH(&work.actions_list AS action) {
+		DLIST_FOREACH(&work AS action) {
 			item = action->item;
 			ret = item->cb.calls_arr[action->call_idx](item);
-			if(ret == -1 || call_idx == IOMPLX_CLOSE_EVENT) {
-				uqueue_unwatch(&mplx->n_queue, item);
+			if(ret == IOMPLX_ITEM_CLOSE || action->call_idx == IOMPLX_CLOSE_EVENT) {
+				uqueue_unwatch(&mplx->n_uqueue, item);
 				close(item->fd);
 				item->fd = -1;
-				iomplx_work_action_del(&work.actions_list, action);
-			} else if(ret == IOMPLX_ITEM_BUSY) {
-				uqueue_activate(&mplx->n_queue, item);
-				iomplx_work_action_del(&work.actions_list, action);
+				iomplx_work_action_del(&work, action);
+			} else if(ret == IOMPLX_ITEM_WOULDBLOCK) {
+				uqueue_activate(&mplx->n_uqueue, item);
+				iomplx_work_action_del(&work, action);
 			}
 		}
 
@@ -205,11 +208,12 @@ iomplx_item *iomplx_item_add(iomplx_instance *mplx, iomplx_item *item, int liste
 	memcpy(&item_copy->cb, &item->cb, sizeof(iomplx_callbacks));
 	item_copy->fd = item->fd;
 	item_copy->timeout = item->timeout;
+	item_copy->oneshot = item->oneshot;
 
 	if(listening)
-		uqueue_watch(&mplx->accept_queue, item_copy);
+		uqueue_watch(&mplx->accept_uqueue, item_copy);
 	else
-		uqueue_watch(&mplx->n_queue, item_copy);
+		uqueue_watch(&mplx->n_uqueue, item_copy);
 
 	item_copy->elapsed_time = 0;
 
@@ -223,8 +227,8 @@ void iomplx_init(iomplx_instance *mplx, alloc_func alloc, free_func free, init_f
 	mplx->thread_init = init;
 	mplx->threads = threads;
 	iomplx_monitor_init(&mplx->monitor, timeout_granularity);
-	uqueue_init(&mplx->accept_queue);
-	uqueue_init(&mplx->n_queue);
+	uqueue_init(&mplx->accept_uqueue);
+	uqueue_init(&mplx->n_uqueue);
 }
 
 static void iomplx_start_threads(iomplx_instance *mplx)

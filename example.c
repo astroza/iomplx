@@ -10,6 +10,9 @@ int demo_receive(iomplx_item *item)
 	int r;
 	puts("READ");
 	r = read(item->fd, buf, sizeof(buf)-1);
+	if(r == -1)
+		return IOMPLX_ITEM_WOULDBLOCK;
+
 	buf[r] = 0;
 	printf("buf=%s", buf);
 

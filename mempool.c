@@ -1,7 +1,7 @@
 #include <stdlib.h>
 #include "mempool.h"
 
-void *mempool_init(mempool_instance *mempool, unsigned int obj_size, unsigned int pool_size)
+void mempool_init(mempool_instance *mempool, unsigned int obj_size, unsigned int pool_size)
 {
 	void *block;
 	int i;

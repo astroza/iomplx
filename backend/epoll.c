@@ -34,13 +34,13 @@ extern int errno;
 void uqueue_init(uqueue *q)
 {
 	q->epoll_iface = epoll_create(EPOLL_QUEUE_SIZE);
-	q->events_max = EVENTS;
 }
 
 void uqueue_event_init(iomplx_event *ev)
 {
 	ev->data.events_count = 0;
 	ev->data.current_event = 0;
+	ev->max_events = EVENTS;
 }
 
 int uqueue_event_get(uqueue *q, iomplx_event *ev, int timeout)
@@ -52,7 +52,7 @@ int uqueue_event_get(uqueue *q, iomplx_event *ev, int timeout)
 
 	if(ev->data.events_count <= ev->data.current_event) {
 		do
-			wait_ret = epoll_wait(q->epoll_iface, ev->data.events, q->events_max, timeout*1000);
+			wait_ret = epoll_wait(q->epoll_iface, ev->data.events, ev->max_events, timeout*1000);
 		while(wait_ret == -1 && errno == EINTR);
 		
 		if(wait_ret == 0)
@@ -71,7 +71,7 @@ int uqueue_event_get(uqueue *q, iomplx_event *ev, int timeout)
 		ev->type = IOMPLX_WRITE_EVENT;
 	ev->item = ee->data.ptr;
 
-	return ev->data.events_count - ev->data.current_event;
+	return ev->data.events_count - ev->data.current_event - 1;
 }
 
 void uqueue_watch(uqueue *q, iomplx_item *item)
@@ -82,7 +82,6 @@ void uqueue_watch(uqueue *q, iomplx_item *item)
 	ev.events = EPOLLRDHUP|EPOLLET|item->new_filter;
 	if(item->oneshot)
 		ev.events |= EPOLLONESHOT;
-
 	epoll_ctl(q->epoll_iface, EPOLL_CTL_ADD, item->fd, &ev);
 	item->filter = item->new_filter;
 	item->new_filter = -1;
@@ -93,7 +92,7 @@ void uqueue_unwatch(uqueue *q, iomplx_item *item)
 	epoll_ctl(q->epoll_iface, EPOLL_CTL_DEL, item->fd, NULL);
 }
 
-void uqueue_active(uqueue *q, iomplx_item *item)
+void uqueue_activate(uqueue *q, iomplx_item *item)
 {
 	item->new_filter = item->filter;
 	uqueue_filter_set(q, item);
@@ -104,7 +103,7 @@ void uqueue_filter_set(uqueue *q, iomplx_item *item)
 	struct epoll_event ev;
 
 	ev.data.ptr = item;
-	ev.events = EPOLLRDHUP|EPOLLET|EPOLLONESHOT|item->new_filter;
+	ev.events = EPOLLRDHUP|EPOLLET|item->new_filter;
 	if(item->oneshot)
 		ev.events |= EPOLLONESHOT;
 	epoll_ctl(q->epoll_iface, EPOLL_CTL_MOD, item->fd, &ev);

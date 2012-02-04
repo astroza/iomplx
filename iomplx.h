@@ -29,6 +29,9 @@
 
 #define IOMPLX_WORK_ACTIONS	EVENTS
 
+#define IOMPLX_ITEM_WOULDBLOCK	-2
+#define IOMPLX_ITEM_CLOSE	-1
+
 typedef struct _iomplx_item iomplx_item;
 
 typedef int (*ev_call1)(iomplx_item *);
@@ -78,6 +81,7 @@ typedef struct {
 typedef struct {
 	uqueue_events data;
 	unsigned char type;
+	unsigned int max_events;
 	iomplx_item *item;
 } iomplx_event;
 
@@ -113,7 +117,7 @@ void uqueue_event_init(iomplx_event *);
 int uqueue_event_get(uqueue *, iomplx_event *, int);
 void uqueue_watch(uqueue *, iomplx_item *);
 void uqueue_unwatch(uqueue *, iomplx_item *);
-void uqueue_active(uqueue *q, iomplx_item *item);
+void uqueue_activate(uqueue *q, iomplx_item *item);
 void uqueue_filter_set(uqueue *, iomplx_item *);
 int accept_and_set(int, struct sockaddr *, unsigned int *);
 void iomplx_callbacks_init(iomplx_item *);
