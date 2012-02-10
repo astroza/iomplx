@@ -10,14 +10,14 @@ int iomplx_inet_listen(iomplx_instance *mplx, const char *addr, unsigned short p
 {
 	iomplx_item *item;
 	struct sockaddr_in *sa;
-	int fd, ret, set = 1, status = 1;
+	int ret, set = 1;
 
 	item = malloc(sizeof(iomplx_item));
 	if(!item)
 		return -1;
 
 	item->fd = socket(AF_INET, SOCK_STREAM, 0);
-	if(fd == -1) {
+	if(item->fd == -1) {
 		free(item);
 		return -1;
 	}
@@ -28,7 +28,7 @@ int iomplx_inet_listen(iomplx_instance *mplx, const char *addr, unsigned short p
 	sa->sin_addr.s_addr = inet_addr(addr);
 	item->sa_size = sizeof(struct sockaddr_in);
 
-	if(setsockopt(item->fd, SOL_SOCKET, SO_REUSEADDR, &status, sizeof(status)) == -1)
+	if(setsockopt(item->fd, SOL_SOCKET, SO_REUSEADDR, &set, sizeof(set)) == -1)
 		goto error;
 
 	ret = bind(item->fd, &item->sa, item->sa_size);

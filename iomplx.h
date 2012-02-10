@@ -21,6 +21,7 @@
 #include <dlist.h>
 #include <mempool.h>
 #include <sys/socket.h>
+#include <time.h>
 
 #define IOMPLX_MAX_ACTIVE_ITEMS 	200
 #define IOMPLX_MAINTENANCE_PERIOD 	4	/* Seconds */
