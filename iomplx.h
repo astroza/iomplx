@@ -157,4 +157,12 @@ static inline void iomplx_item_timeout_set(iomplx_item *item, unsigned long time
 	item->timeout.time_limit = time_limit;
 }
 
+static inline void uqueue_max_events_set(iomplx_waiter *waiter, int max_events)
+{ 
+	if(max_events > UQUEUE_MAX_EVENTS)
+		waiter->max_events = UQUEUE_MAX_EVENTS;
+	else
+		waiter->max_events = max_events;  
+}
+
 #endif

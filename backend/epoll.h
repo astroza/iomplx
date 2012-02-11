@@ -19,11 +19,12 @@
 
 #ifndef EPOLL_H
 #include <sys/epoll.h>
-#define EVENTS 			10
+#include "common.h"
+
 #define EPOLL_QUEUE_SIZE 	100
 
 typedef struct {
-	struct epoll_event events[EVENTS];
+	struct epoll_event events[UQUEUE_MAX_EVENTS];
 	unsigned int events_count;
 	unsigned int current_event;
 } uqueue_events;

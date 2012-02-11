@@ -32,7 +32,7 @@ void uqueue_event_init(iomplx_waiter *waiter)
 {
 	waiter->data.events_count = 0;
 	waiter->data.current_event = 0;
-	waiter->max_events = EVENTS;
+	waiter->max_events = UQUEUE_MAX_EVENTS;
 }
 
 int uqueue_event_get(uqueue *q, iomplx_waiter *waiter, int timeout)
@@ -52,7 +52,7 @@ int uqueue_event_get(uqueue *q, iomplx_waiter *waiter, int timeout)
 				pts = &ts;
 			}
 			wait_ret = kevent(q->kqueue_iface, NULL, 
-			0, waiter->data.events, EVENTS, pts);
+			0, waiter->data.events, waiter->max_events, pts);
 		} while(wait_ret == -1 && errno == EINTR);
 
 		if(wait_ret == 0) 

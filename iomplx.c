@@ -94,7 +94,7 @@ static void iomplx_active_list_populate(iomplx_active_list *active_list, uqueue 
 	else
 		timeout = 0;
 
-	waiter.max_events = active_list->available_item_calls;
+	uqueue_max_events_set(&waiter, active_list->available_item_calls);
 	do {
 		rmg = uqueue_event_get(q, &waiter, timeout);
 		if(rmg != -1) {

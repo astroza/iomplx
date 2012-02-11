@@ -40,7 +40,7 @@ void uqueue_event_init(iomplx_waiter *waiter)
 {
 	waiter->data.events_count = 0;
 	waiter->data.current_event = 0;
-	waiter->max_events = EVENTS;
+	waiter->max_events = UQUEUE_MAX_EVENTS;
 }
 
 int uqueue_event_get(uqueue *q, iomplx_waiter *waiter, int timeout)

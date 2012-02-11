@@ -23,11 +23,10 @@
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/event.h>
-
-#define EVENTS 			10
+#include "common.h"
 
 typedef struct {
-	struct kevent events[EVENTS];
+	struct kevent events[UQUEUE_MAX_EVENTS];
 	unsigned int events_count;
 	unsigned int current_event;
 } uqueue_events;
