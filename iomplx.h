@@ -62,7 +62,6 @@ typedef union {
 struct _iomplx_item {
 	DLIST_NODE(item);
 	int fd;
-
 	int filter;
 	int applied_filter;
 	unsigned char oneshot:1;
@@ -74,7 +73,6 @@ struct _iomplx_item {
 		struct {
 			alloc_func item_alloc;
 			free_func item_free;
-			dlist guard;
 		};
 	};
 
@@ -85,7 +83,9 @@ struct _iomplx_item {
 		unsigned int start_time;
 	} timeout;
 
+	struct _iomplx_item *parent;
 	void *data;
+
 	union {
 		struct {
 			struct sockaddr sa;
@@ -112,7 +112,8 @@ typedef struct {
 #define THREAD_N 1
 	unsigned int active_list_size[2];
 	init_func thread_init;
-	dlist guards;
+	int recycler[2];
+	iomplx_item recycler_item;
 } iomplx_instance;
 
 typedef struct {
@@ -126,6 +127,13 @@ typedef struct {
 	mempool_instance item_calls_pool;
 	unsigned int available_item_calls;
 } iomplx_active_list;
+
+#define IOMPLX_ITEMS_DUMP_MAX_SIZE 	UQUEUE_MAX_EVENTS
+
+typedef struct {
+	void *items[IOMPLX_ITEMS_DUMP_MAX_SIZE];
+	unsigned int size;
+} iomplx_items_dump;
 
 #define IOMPLX_READ	UQUEUE_READ_EVENT
 #define IOMPLX_WRITE	UQUEUE_WRITE_EVENT
@@ -155,6 +163,11 @@ static inline void iomplx_item_timeout_set(iomplx_item *item, unsigned long time
 {
 	item->timeout.start_time = time(NULL);
 	item->timeout.time_limit = time_limit;
+}
+
+static inline void iomplx_items_dump_init(iomplx_items_dump *items_dump)
+{
+	items_dump->size = 0;
 }
 
 static inline void uqueue_max_events_set(iomplx_waiter *waiter, int max_events)

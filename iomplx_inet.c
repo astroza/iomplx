@@ -47,9 +47,7 @@ int iomplx_inet_listen(iomplx_instance *mplx, const char *addr, unsigned short p
 	item->oneshot = 0;
 	item->filter = IOMPLX_READ;
 	item->cb.ev_accept = ev_accept;
-
-	DLIST_INIT(&item->guard);
-	DLIST_APPEND(&mplx->guards, item);
+	item->parent = NULL;
 
 	iomplx_item_add(mplx, item, 1);
 	return 0;

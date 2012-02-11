@@ -141,30 +141,16 @@ static inline void iomplx_item_timeout_check(uqueue *n_uqueue, iomplx_item *item
 	}
 }
 
-static void iomplx_guard_maintenance(uqueue *n_uqueue, dlist *items, free_func item_free, unsigned long cur_time)
+static void iomplx_do_recycle(int recycler_fd)
 {
-	iomplx_item *item;
-
-	DLIST_FOREACH(items AS item) {
-		/* Free closed item */
-		if(item->fd == -1) {
-			DLIST_DEL(items, item);
-			item_free(item);
-			continue;
+	iomplx_item *items[IOMPLX_ITEMS_DUMP_MAX_SIZE * 4];
+	int ret, i;
+	
+	while((ret = read(recycler_fd, items, sizeof(items))) != -1) {
+		for(i = 0; i < ret/sizeof(void *); i++) {
+			printf("Calling %p to free %p\n", items[i]->parent->item_free, items[i]);
+			items[i]->parent->item_free(items[i]);
 		}
-		iomplx_item_timeout_check(n_uqueue, item, cur_time);
-	}
-}
-
-static void iomplx_do_maintenance(uqueue *n_uqueue, dlist *guards, unsigned long *start_time)
-{
-	unsigned long cur_time = time(NULL);
-	iomplx_item *item;
-
-	if(cur_time - *start_time >= IOMPLX_MAINTENANCE_PERIOD) {
-		DLIST_FOREACH(guards AS item)
-			iomplx_guard_maintenance(n_uqueue, &item->guard, item->item_free, cur_time);
-		*start_time = cur_time;
 	}
 }
 
@@ -176,15 +162,19 @@ static void iomplx_thread_0(iomplx_instance *mplx)
 	struct sockaddr sa;
 	socklen_t sa_size;
 	int fd;
-	unsigned long start_time = time(NULL);
 
 	iomplx_active_list_init(&active_list, mplx->active_list_size[THREAD_0]);
 
 	do {
-		iomplx_active_list_populate(&active_list, &mplx->accept_uqueue, IOMPLX_MAINTENANCE_PERIOD);
+		iomplx_active_list_populate(&active_list, &mplx->accept_uqueue, -1);
 
 		DLIST_FOREACH(&active_list AS item_call) {
 			item = item_call->item;
+			if(item == &mplx->recycler_item) {
+				iomplx_do_recycle(item->fd);
+				continue;
+			}
+
 			sa_size = item->sa_size;
 			fd = accept_and_set(item->fd, &sa, &sa_size);
 			if(fd == -1) {
@@ -201,24 +191,40 @@ static void iomplx_thread_0(iomplx_instance *mplx)
 				new_item->sa = sa;
 				new_item->sa_size = sa_size;
 				new_item->oneshot = 1;
+				new_item->parent = item;
 				if(item->cb.ev_accept(new_item) < 0) {
 					item->item_free(new_item);
 					close(fd);
-				} else {
+				} else
 					iomplx_item_add(mplx, new_item, 0);
-					DLIST_APPEND(&item->guard, new_item);
-				}
 			}
 		}
-		iomplx_do_maintenance(&mplx->n_uqueue, &mplx->guards, &start_time);
-
 	} while(1);
+}
+
+static void iomplx_items_recycle(iomplx_instance *mplx, iomplx_items_dump *dump)
+{
+	if(dump->size > 0) {
+		write(mplx->recycler[1], dump->items, dump->size * sizeof(void *));
+		dump->size = 0;
+	}
+}
+
+static void iomplx_item_throw_away(iomplx_instance *mplx, iomplx_items_dump *dump, iomplx_item *item)
+{
+	if(dump->size < IOMPLX_ITEMS_DUMP_MAX_SIZE)
+		dump->items[dump->size++] = item;
+	else {
+		iomplx_items_recycle(mplx, dump);
+		iomplx_item_throw_away(mplx, dump, item);
+	}
 }
 
 static void iomplx_thread_n(iomplx_instance *mplx)
 {
 	iomplx_active_list active_list;
 	iomplx_item_call *item_call;
+	iomplx_items_dump dump;
 	iomplx_item *item;
 	int ret;
 
@@ -227,8 +233,10 @@ static void iomplx_thread_n(iomplx_instance *mplx)
 		mplx->thread_init();
 
 	iomplx_active_list_init(&active_list, mplx->active_list_size[THREAD_N]);
+	iomplx_items_dump_init(&dump);
 
 	do {
+		iomplx_items_recycle(mplx, &dump);
 		iomplx_active_list_populate(&active_list, &mplx->n_uqueue, -1);
 
 		DLIST_FOREACH(&active_list AS item_call) {
@@ -242,8 +250,8 @@ static void iomplx_thread_n(iomplx_instance *mplx)
 
 			if(item_call->call_idx == IOMPLX_CLOSE_EVENT) {
 				close(item->fd);
-				item->fd = -1;
 				iomplx_active_list_call_del(&active_list, item_call);
+				iomplx_item_throw_away(mplx, &dump, item);
 			} else if(ret == IOMPLX_ITEM_WOULDBLOCK) {
 				if(!item->timeout.high) {
 					if(uqueue_enable(&mplx->n_uqueue, item) == 0)
@@ -283,9 +291,14 @@ void iomplx_init(iomplx_instance *mplx, init_func init, unsigned int threads)
 	mplx->threads = threads;
 	mplx->active_list_size[THREAD_0] = 10;
 	mplx->active_list_size[THREAD_N] = IOMPLX_MAX_ACTIVE_ITEMS/threads + (IOMPLX_MAX_ACTIVE_ITEMS%threads != 0? 1 : 0);
-	DLIST_INIT(&mplx->guards);
 	uqueue_init(&mplx->accept_uqueue);
 	uqueue_init(&mplx->n_uqueue);
+
+	pipe(mplx->recycler);
+	mplx->recycler_item.fd = mplx->recycler[0];
+	mplx->recycler_item.oneshot = 0;
+	iomplx_item_filter_set(&mplx->recycler_item, IOMPLX_READ);
+	iomplx_item_add(mplx, &mplx->recycler_item, 1);
 }
 
 static void iomplx_start_threads(iomplx_instance *mplx)
