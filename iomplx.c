@@ -287,6 +287,8 @@ void iomplx_item_add(iomplx_instance *mplx, iomplx_item *item, int listening)
 
 void iomplx_init(iomplx_instance *mplx, init_func init, unsigned int threads)
 {
+	int set = 1;
+
 	mplx->thread_init = init;
 	mplx->threads = threads;
 	mplx->active_list_size[THREAD_0] = 10;
@@ -295,6 +297,7 @@ void iomplx_init(iomplx_instance *mplx, init_func init, unsigned int threads)
 	uqueue_init(&mplx->n_uqueue);
 
 	pipe(mplx->recycler);
+	ioctl(mplx->recycler[0], FIONBIO, &set);
 	mplx->recycler_item.fd = mplx->recycler[0];
 	mplx->recycler_item.oneshot = 0;
 	iomplx_item_filter_set(&mplx->recycler_item, IOMPLX_READ);
