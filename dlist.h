@@ -28,6 +28,12 @@ typedef struct {
 	dlist_node *head, *tail;
 } dlist;
 
+static inline int __copy_dlist_node(dlist_node *dst, dlist_node *src)
+{
+	*dst = *src;
+	return 1;
+}
+
 #ifndef NULL
 #define NULL ((void *)0)
 #endif
@@ -39,8 +45,11 @@ typedef struct {
 #define DLIST(name)			dlist name##_list
 #define DLIST_NODE(name)		dlist_node name##_node
 #define AS ,
-#define _FOREACH(list, node)		for(node = (void *)((dlist *)list)->head; node != NULL; node = (void *)((dlist_node *)node)->next)
-#define DLIST_FOREACH(exp)		_FOREACH(exp)
+#define _FOREACH(list, node)		for(node = (void *)((dlist *)list)->head; \
+					node != NULL && __copy_dlist_node(&__node_copy, (dlist_node *)node); \
+					node = (void *)__node_copy.next)
+#define DLIST_FOREACH(exp)		dlist_node __node_copy; \
+					_FOREACH(exp)
 
 void dlist_append(dlist *, dlist_node *);
 void dlist_del(dlist *, dlist_node *);
