@@ -103,15 +103,15 @@ static void mplx3_thread_0(mplx3_multiplexer *mplx)
 
 		if(time(NULL) - start_time >= mplx->monitor.timeout_granularity) {
 			DLIST_FOREACH(&mplx->monitor AS ep) {
-
-				if(ep->sockfd != -1) {
-					ep->elapsed_time++;
-					if(ep->elapsed_time >= ep->timeout && ep->cb.ev_timeout(ep) == -1)
-						shutdown(ep->sockfd, SHUT_RDWR);
-				} else {
+				if(ep->sockfd == -1) {
 					mplx3_monitor_del(&mplx->monitor, ep);
 					mplx->ep_free(ep);
+					continue;
 				}
+
+				ep->elapsed_time++;
+				if(ep->elapsed_time >= ep->timeout && ep->cb.ev_timeout(ep) == -1)
+					shutdown(ep->sockfd, SHUT_RDWR);
 			}
 			start_time = time(NULL);
 		}
