@@ -45,11 +45,12 @@ static inline int __copy_dlist_node(dlist_node *dst, dlist_node *src)
 #define DLIST(name)			dlist name##_list
 #define DLIST_NODE(name)		dlist_node name##_node
 #define AS ,
-#define _FOREACH(list, node)		for(node = (void *)((dlist *)list)->head; \
-					node != NULL && __copy_dlist_node(&__node_copy, (dlist_node *)node); \
-					node = (void *)__node_copy.next)
-#define DLIST_FOREACH(exp)		dlist_node __node_copy; \
-					_FOREACH(exp)
+#define RCOPY_ID(line) node_copy_ ## line
+#define COPY_ID(line) RCOPY_ID(line)
+#define _FOREACH(node_copy, list, node)	for(node = (void *)((dlist *)list)->head; \
+					node != NULL && __copy_dlist_node(&node_copy, (dlist_node *)node); \
+					node = (void *)node_copy.next)
+#define DLIST_FOREACH(exp)		dlist_node COPY_ID(__LINE__); _FOREACH(COPY_ID(__LINE__), exp)
 
 void dlist_append(dlist *, dlist_node *);
 void dlist_del(dlist *, dlist_node *);
