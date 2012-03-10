@@ -38,7 +38,7 @@ typedef struct {
 	unsigned int changes_count;
 } uqueue;
 
-#define UQUEUE_RECEIVE_EVENT	EVFILT_READ
-#define UQUEUE_SEND_EVENT	EVFILT_WRITE
+#define UQUEUE_READ_EVENT	EVFILT_READ
+#define UQUEUE_WRITE_EVENT	EVFILT_WRITE
 
 #endif

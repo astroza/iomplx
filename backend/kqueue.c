@@ -1,5 +1,5 @@
 /*
- * MPLX3
+ * iomplx
  * Copyright © 2011 Felipe Astroza
  *
  * This library is free software; you can redistribute it and/or
@@ -17,7 +17,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-#include <mplx3.h>
+#include <iomplx.h>
 #include <sys/ioctl.h>
 #include <errno.h>
 #include <assert.h>
@@ -29,13 +29,13 @@ void uqueue_init(uqueue *q)
 	q->changes_count = 0;
 }
 
-void uqueue_event_init(mplx3_event *ev)
+void uqueue_event_init(iomplx_event *ev)
 {
 	ev->data.events_count = 0;
 	ev->data.current_event = 0;
 }
 
-int uqueue_wait(uqueue *q, mplx3_event *ev, int timeout)
+int uqueue_wait(uqueue *q, iomplx_event *ev, int timeout)
 {
 	struct kevent *ke;
 	struct timespec ts, *pts;
@@ -64,32 +64,32 @@ int uqueue_wait(uqueue *q, mplx3_event *ev, int timeout)
 	}
 
 	ke = ev->data.events + ev->data.current_event;
-	ev->ep = ke->udata;
-	assert(ev->ep != NULL);
+	ev->item = ke->udata;
+	assert(ev->item != NULL);
 	if(ke->flags & EV_EOF)
-		ev->type = MPLX3_DISCONNECT_EVENT;
+		ev->type = IOMPLX_CLOSE_EVENT;
 	else if(ke->filter == EVFILT_READ)
-		ev->type = MPLX3_RECEIVE_EVENT;
+		ev->type = IOMPLX_READ_EVENT;
 	else if(ke->filter == EVFILT_WRITE)
-		ev->type = MPLX3_SEND_EVENT;
+		ev->type = IOMPLX_WRITE_EVENT;
 	return 1;
 }
 
-void uqueue_watch(uqueue *q, mplx3_endpoint *ep)
+void uqueue_watch(uqueue *q, iomplx_item *item)
 {
 	struct kevent c;
 	
-	EV_SET(&c, ep->sockfd, EVFILT_READ, EV_ADD|EV_CLEAR|EV_ENABLE|EV_RECEIPT, 0, 0, ep);
+	EV_SET(&c, item->fd, EVFILT_READ, EV_ADD|EV_CLEAR|EV_ENABLE|EV_RECEIPT, 0, 0, item);
 	kevent(q->kqueue_iface, &c, 1, NULL, 0, NULL);
 }
 
-void uqueue_unwatch(uqueue *q, mplx3_endpoint *ep)
+void uqueue_unwatch(uqueue *q, iomplx_item *item)
 {
 }
 
-void uqueue_filter_set(uqueue *q, mplx3_endpoint *ep)
+void uqueue_filter_set(uqueue *q, iomplx_item *item)
 {
-	EV_SET(q->changes + q->changes_count, ep->sockfd, ep->new_filter, EV_ADD|EV_ENABLE|EV_CLEAR, 0, 0, ep);
+	EV_SET(q->changes + q->changes_count, item->fd, item->new_filter, EV_ADD|EV_ENABLE|EV_CLEAR, 0, 0, item);
 	q->changes_count++;
 }
 

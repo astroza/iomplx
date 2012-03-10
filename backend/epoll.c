@@ -1,5 +1,5 @@
 /*
- * MPLX3
+ * IOMPLX
  * Copyright © 2011 Felipe Astroza
  *
  * This library is free software; you can redistribute it and/or
@@ -17,7 +17,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-#include <mplx3.h>
+#include <iomplx.h>
 #include <sys/types.h>
 #define _GNU_SOURCE
 #include <sys/socket.h>
@@ -36,13 +36,13 @@ void uqueue_init(uqueue *q)
 	q->epoll_iface = epoll_create(EPOLL_QUEUE_SIZE);
 }
 
-void uqueue_event_init(mplx3_event *ev)
+void uqueue_event_init(iomplx_event *ev)
 {
 	ev->data.events_count = 0;
 	ev->data.current_event = 0;
 }
 
-int uqueue_wait(uqueue *q, mplx3_event *ev, int timeout)
+int uqueue_wait(uqueue *q, iomplx_event *ev, int timeout)
 {
 	struct epoll_event *ee;
 	int wait_ret;
@@ -63,40 +63,40 @@ int uqueue_wait(uqueue *q, mplx3_event *ev, int timeout)
 
 	ee = ev->data.events + ev->data.current_event;
 	if(ee->events & (EPOLLRDHUP|EPOLLERR|EPOLLHUP))
-		ev->type = MPLX3_DISCONNECT_EVENT;
+		ev->type = IOMPLX_CLOSE_EVENT;
 	else if(ee->events & EPOLLIN)
-		ev->type = MPLX3_RECEIVE_EVENT;
+		ev->type = IOMPLX_READ_EVENT;
 	else if(ee->events & EPOLLOUT)
-		ev->type = MPLX3_SEND_EVENT;
-	ev->ep = ee->data.ptr;
+		ev->type = IOMPLX_WRITE_EVENT;
+	ev->item = ee->data.ptr;
 
 	return 1;
 }
 
-void uqueue_watch(uqueue *q, mplx3_endpoint *ep)
+void uqueue_watch(uqueue *q, iomplx_item *item)
 {
 	struct epoll_event ev;
 
-	ev.data.ptr = ep;
-	ev.events = EPOLLRDHUP|EPOLLET|ep->new_filter;
-	epoll_ctl(q->epoll_iface, EPOLL_CTL_ADD, ep->sockfd, &ev); 
+	ev.data.ptr = item;
+	ev.events = EPOLLRDHUP|EPOLLET|item->new_filter;
+	epoll_ctl(q->epoll_iface, EPOLL_CTL_ADD, item->fd, &ev); 
 }
 
-void uqueue_unwatch(uqueue *q, mplx3_endpoint *ep)
+void uqueue_unwatch(uqueue *q, iomplx_item *item)
 {
-	epoll_ctl(q->epoll_iface, EPOLL_CTL_DEL, ep->sockfd, NULL);
+	epoll_ctl(q->epoll_iface, EPOLL_CTL_DEL, item->fd, NULL);
 }
 
-void uqueue_filter_set(uqueue *q, mplx3_endpoint *ep)
+void uqueue_filter_set(uqueue *q, iomplx_item *item)
 {
 	struct epoll_event ev;
 
-	ev.data.ptr = ep;
-	ev.events = EPOLLRDHUP|EPOLLET|ep->new_filter;
-	epoll_ctl(q->epoll_iface, EPOLL_CTL_MOD, ep->sockfd, &ev);
+	ev.data.ptr = item;
+	ev.events = EPOLLRDHUP|EPOLLET|item->new_filter;
+	epoll_ctl(q->epoll_iface, EPOLL_CTL_MOD, item->fd, &ev);
 }
 
-int accept_and_set(int fd, struct sockaddr *sa, unsigned int *sa_size)
+int accept_and_set(int sockfd, struct sockaddr *sa, unsigned int *sa_size)
 {
-	return accept4(fd, sa, sa_size, SOCK_NONBLOCK);
+	return accept4(sockfd, sa, sa_size, SOCK_NONBLOCK);
 }

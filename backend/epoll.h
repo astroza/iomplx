@@ -32,7 +32,7 @@ typedef struct {
 	int epoll_iface;
 } uqueue;
 
-#define UQUEUE_RECEIVE_EVENT	EPOLLIN
-#define UQUEUE_SEND_EVENT	EPOLLOUT
+#define UQUEUE_READ_EVENT	EPOLLIN
+#define UQUEUE_WRITE_EVENT	EPOLLOUT
 
 #endif

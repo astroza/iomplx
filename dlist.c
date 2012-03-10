@@ -1,5 +1,5 @@
 /*
- * MPLX3
+ * IOMPLX
  * Copyright © 2011 Felipe Astroza
  *
  * This library is free software; you can redistribute it and/or
