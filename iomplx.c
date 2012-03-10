@@ -76,6 +76,27 @@ static const iomplx_callbacks iomplx_dummy_calls = {
 	.calls_arr = {iomplx_dummy_call1, iomplx_dummy_call1, iomplx_dummy_call1, iomplx_dummy_call1, iomplx_dummy_call1}
 };
 
+static void iomplx_do_maintenance(iomplx_instance *mplx, unsigned long *start_time)
+{
+	iomplx_item *item;
+	
+	if(time(NULL) - *start_time >= mplx->monitor.timeout_granularity) {
+		DLIST_FOREACH(&mplx->monitor AS item) {
+			/* Free closed item */
+			if(item->fd == -1) {
+				iomplx_monitor_del(&mplx->monitor, item);
+				mplx->item_free(item);
+				continue;
+			}
+			/* Timeout check */
+			item->elapsed_time++;
+			if(item->elapsed_time >= item->timeout && item->cb.ev_timeout(item) == -1)
+				shutdown(item->fd, SHUT_RDWR);
+		}
+		*start_time = time(NULL);
+	}
+}
+
 static void iomplx_thread_0(iomplx_instance *mplx)
 {
 	iomplx_item *item, local_item;
@@ -101,20 +122,8 @@ static void iomplx_thread_0(iomplx_instance *mplx)
 			}
 		}
 
-		if(time(NULL) - start_time >= mplx->monitor.timeout_granularity) {
-			DLIST_FOREACH(&mplx->monitor AS item) {
-				if(item->fd == -1) {
-					iomplx_monitor_del(&mplx->monitor, item);
-					mplx->item_free(item);
-					continue;
-				}
-				/* Timeout check */
-				item->elapsed_time++;
-				if(item->elapsed_time >= item->timeout && item->cb.ev_timeout(item) == -1)
-					shutdown(item->fd, SHUT_RDWR);
-			}
-			start_time = time(NULL);
-		}
+		iomplx_do_maintenance(mplx, &start_time);
+		
 	} while(1);
 }
 
@@ -190,6 +199,23 @@ error:
 	close(sockfd);
 	return -1;
 }
+
+int iomplx_fd_add(iomplx_instance *mplx, int fd, iomplx_callbacks *cb, int filter, void *data)
+{
+	iomplx_item *item;
+
+	item = mplx->item_alloc(sizeof(iomplx_item));
+	if(item == NULL)
+		return -1;
+
+	item->new_filter = filter;
+        DLIST_NODE_INIT(item);
+        memcpy(&item->cb, cb, sizeof(iomplx_callbacks));
+	uqueue_watch(&mplx->n_queue, item);
+
+	return 1;
+}
+
 /*
 int iomplx_connect(const char *addr, unsigned short port, iomplx_callbacks *cb, void *data)
 {

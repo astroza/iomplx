@@ -97,6 +97,7 @@ void uqueue_unwatch(uqueue *, iomplx_item *);
 void uqueue_filter_set(uqueue *, iomplx_item *);
 int accept_and_set(int, struct sockaddr *, unsigned int *);
 
+int iomplx_fd_add(iomplx_instance *, int, iomplx_callbacks *, int, void *);
 int iomplx_listen(iomplx_instance *, const char *, unsigned short, ev_call1, void *);
 int iomplx_connect(const char *, unsigned short, iomplx_callbacks *, void *);
 void iomplx_filter_set(iomplx_item *, int);
