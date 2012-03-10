@@ -18,10 +18,17 @@ UQUEUE_SRC=backend/$(shell echo $(UQUEUE) | tr A-Z a-z).c
 SRC+=$(UQUEUE_SRC)
 
 OBJ=$(SRC:.c=.o)
-all: $(OBJ)
-	$(CC) $? -o example -lpthread
+all: prepare example
+	@echo "Done"
+
+prepare:
+	mkdir -p objs/backend
+
+example: $(OBJ)
+	cd objs; $(CC) $^ -o ../example -lpthread
+
 %.o: %.c
-	$(CC) -D$(UQUEUE) $(include) $? -c $(CFLAGS) $(INCLUDE) -o $@
+	$(CC) -D$(UQUEUE) $(include) $? -c $(CFLAGS) $(INCLUDE) -o objs/$@
 
 clean:
-	rm -f *.o example
+	rm -fr objs example
