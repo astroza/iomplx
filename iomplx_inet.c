@@ -1,6 +1,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <iomplx.h>
+#include <iomplx_inet.h>
 #include <unistd.h>
 
 int iomplx_inet_listen(iomplx_instance *mplx, const char *addr, unsigned short port, ev_call1 ev_accept, void *data)

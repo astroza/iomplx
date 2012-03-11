@@ -21,8 +21,6 @@
 #include <dlist.h>
 #include <sys/socket.h>
 
-#define IOMPLX_CONF_BACKLOG	10
-
 #define IOMPLX_READ_EVENT	1
 #define IOMPLX_WRITE_EVENT	2
 #define IOMPLX_TIMEOUT_EVENT	3
@@ -99,9 +97,6 @@ int accept_and_set(int, struct sockaddr *, unsigned int *);
 void iomplx_callbacks_init(iomplx_item *);
 
 iomplx_item *iomplx_item_add(iomplx_instance *, iomplx_item *, int);
-int iomplx_listen(iomplx_instance *, const char *, unsigned short, ev_call1, void *);
-int iomplx_connect(const char *, unsigned short, iomplx_callbacks *, void *);
-void iomplx_specialize();
 
 void iomplx_init(iomplx_instance *, alloc_func, free_func, unsigned int, unsigned int);
 void iomplx_launch(iomplx_instance *);
