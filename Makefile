@@ -7,6 +7,8 @@ SRC=example.c \
     iomplx.c \
     iomplx_inet.c
 
+UQUEUE=NOUQUEUE
+
 ifneq ($(findstring /usr/include/sys/epoll.h, $(wildcard /usr/include/sys/*.h)), )
 	UQUEUE=EPOLL
 endif

@@ -21,16 +21,16 @@
 
 #ifdef EPOLL
 #include <backend/epoll.h>
-#define UPOLL_MECHANISM
+#define UQUEUE_MECHANISM
 #endif
 
 #ifdef KQUEUE
 #include "backend/kqueue.h"
-#define UPOLL_MECHANISM
+#define UQUEUE_MECHANISM
 #endif
 
-#ifndef UPOLL_MECHANISM
-#error "No upoll mechanism"                         
+#ifndef UQUEUE_MECHANISM
+#error "No uqueue mechanism"                         
 #endif
 
 #endif
