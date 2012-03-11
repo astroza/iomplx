@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <iomplx.h>
+#include <iomplx_inet.h>
 
 int demo_receive(iomplx_item *item)
 {
@@ -41,7 +42,7 @@ int main()
 	iomplx_instance m;
 	
 	iomplx_init(&m, malloc, free, 4, 4);
-	iomplx_listen(&m, "0.0.0.0", 2222, demo_accept, NULL);
+	iomplx_inet_listen(&m, "0.0.0.0", 2222, demo_accept, NULL);
 	iomplx_launch(&m);
 
 	return 0;

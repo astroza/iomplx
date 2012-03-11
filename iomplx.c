@@ -42,25 +42,6 @@ static inline void iomplx_monitor_init(iomplx_monitor *mon, int timeout_granular
 	mon->timeout_granularity = timeout_granularity;
 }
 
-static iomplx_item *iomplx_item_clone(iomplx_instance *mplx, iomplx_item *item)
-{
-	iomplx_item *new_item;
-
-	new_item = mplx->item_alloc(sizeof(iomplx_item));
-	if(new_item)
-		memcpy(new_item, item, sizeof(iomplx_item));
-
-	return new_item;
-}
-
-static void iomplx_item_init(iomplx_item *item, unsigned int sa_size, const iomplx_callbacks *cb)
-{
-	item->sa_size = sa_size;
-	item->new_filter = IOMPLX_READ;
-	DLIST_NODE_INIT(item);
-	memcpy(&item->cb, cb, sizeof(iomplx_callbacks));
-}
-
 static void iomplx_event_init(iomplx_event *ev)
 {
 	ev->item = NULL;
@@ -75,6 +56,11 @@ static int iomplx_dummy_call1(iomplx_item *item)
 static const iomplx_callbacks iomplx_dummy_calls = {
 	.calls_arr = {iomplx_dummy_call1, iomplx_dummy_call1, iomplx_dummy_call1, iomplx_dummy_call1, iomplx_dummy_call1}
 };
+
+void iomplx_callbacks_init(iomplx_item *item)
+{
+	memcpy(&item->cb, &iomplx_dummy_calls, sizeof(iomplx_callbacks));
+}
 
 static void iomplx_do_maintenance(iomplx_instance *mplx, unsigned long *start_time)
 {
@@ -107,18 +93,16 @@ static void iomplx_thread_0(iomplx_instance *mplx)
 	do {
 		if(uqueue_wait(&mplx->accept_queue, &ev, mplx->monitor.timeout_granularity)) {
 
-			iomplx_item_init(&local_item, ev.item->sa_size, &iomplx_dummy_calls);
+			iomplx_callbacks_init(&local_item);
+			local_item.new_filter = IOMPLX_READ;
+			local_item.sa_size = ev.item->sa_size;
 			local_item.fd = accept_and_set(ev.item->fd, &local_item.sa, &local_item.sa_size);
 
 			if(local_item.fd != -1) {
-				if(ev.item->cb.ev_accept(&local_item) < 0 || !(item = iomplx_item_clone(mplx, &local_item)))
+				if(ev.item->cb.ev_accept(&local_item) < 0 || !(item = iomplx_item_add(mplx, &local_item, 0)))
 					close(local_item.fd);
-				else {
-					item->elapsed_time = 0;
+				else
 					iomplx_monitor_add(&mplx->monitor, item);
-					uqueue_watch(&mplx->n_queue, item);
-					item->new_filter = -1;
-				}
 			}
 		}
 
@@ -136,6 +120,7 @@ static void iomplx_thread_n(iomplx_instance *mplx)
 		uqueue_wait(&mplx->n_queue, &ev, -1);
 
 		ev.item->elapsed_time = 0;
+
 		if(ev.type == IOMPLX_CLOSE_EVENT) {
 			uqueue_unwatch(&mplx->n_queue, ev.item);
 			close(ev.item->fd);
@@ -151,82 +136,31 @@ static void iomplx_thread_n(iomplx_instance *mplx)
 	} while(1);
 }
 
-inline void iomplx_item_filter_set(iomplx_item *item, int filter)
+iomplx_item *iomplx_item_add(iomplx_instance *mplx, iomplx_item *item, int listening)
 {
-	item->new_filter = filter;
+	iomplx_item *item_copy;
+
+	item_copy = mplx->item_alloc(sizeof(iomplx_item));
+	if(item_copy == NULL)
+		return NULL;
+
+	DLIST_NODE_INIT(item_copy);
+	item_copy->new_filter = item->new_filter;
+	memcpy(&item_copy->cb, &item->cb, sizeof(iomplx_callbacks));
+	item_copy->fd = item->fd;
+	item_copy->timeout = item->timeout;
+
+	if(listening)
+		uqueue_watch(&mplx->accept_queue, item_copy);
+	else
+		uqueue_watch(&mplx->n_queue, item_copy);
+
+	item_copy->elapsed_time = 0;
+	item_copy->new_filter = -1;
+
+	return item_copy;
 }
 
-int iomplx_listen(iomplx_instance *mplx, const char *addr, unsigned short port, ev_call1 ev_accept, void *data)
-{
-	struct sockaddr_in sa;
-	iomplx_item *item;
-	iomplx_callbacks cb;
-	socklen_t sa_size;
-	int sockfd;
-	int ret;
-	int status = 1;
-
-	sockfd = socket(AF_INET, SOCK_STREAM, 0);
-	if ( sockfd == -1 )
-		return -1;
-
-	sa.sin_family = AF_INET;
-	sa.sin_port = htons(port);
-	sa.sin_addr.s_addr = inet_addr(addr);
-	sa_size = sizeof(struct sockaddr_in);
-
-	if(setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &status, sizeof(status)) == -1)
-		goto error;
-
-	ret = bind(sockfd, (struct sockaddr *)&sa, sa_size);
-	if ( ret == -1 )
-		goto error;
-
-	if (listen(sockfd, IOMPLX_CONF_BACKLOG) == -1)
-		goto error;
-
-	item = mplx->item_alloc(sizeof(iomplx_item));
-	if(!item)
-		goto error;
-
-	cb.ev_accept = ev_accept;
-	iomplx_item_init(item, sa_size, &cb);
-	item->fd = sockfd;
-	uqueue_watch(&mplx->accept_queue, item);
-
-	return 0;
-error:
-	close(sockfd);
-	return -1;
-}
-
-int iomplx_fd_add(iomplx_instance *mplx, int fd, iomplx_callbacks *cb, int filter, void *data)
-{
-	iomplx_item *item;
-
-	item = mplx->item_alloc(sizeof(iomplx_item));
-	if(item == NULL)
-		return -1;
-
-	item->new_filter = filter;
-        DLIST_NODE_INIT(item);
-        memcpy(&item->cb, cb, sizeof(iomplx_callbacks));
-	uqueue_watch(&mplx->n_queue, item);
-
-	return 1;
-}
-
-/*
-int iomplx_connect(const char *addr, unsigned short port, iomplx_callbacks *cb, void *data)
-{
-
-}
-
-void iomplx_specialize()
-{
-
-}
-*/
 void iomplx_init(iomplx_instance *mplx, alloc_func alloc, free_func free, unsigned int threads, unsigned int timeout_granularity)
 {
 	mplx->item_alloc = alloc;

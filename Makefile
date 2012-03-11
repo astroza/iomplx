@@ -4,7 +4,8 @@ INCLUDE=-I.
 
 SRC=example.c \
     dlist.c \
-    iomplx.c
+    iomplx.c \
+    iomplx_inet.c
 
 ifneq ($(findstring /usr/include/sys/epoll.h, $(wildcard /usr/include/sys/*.h)), )
 	UQUEUE=EPOLL
