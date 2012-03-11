@@ -1,0 +1,20 @@
+IOMPLX
+
+Spanish:
+Introduccion
+
+Es una biblioteca que simplifica el desarrollo de servicios. Su meta es
+sacar el maximo provecho a la plataforma subyacente y toma un especial cuidado
+en explotar sistemas multinucleo.
+
+¿Como funciona?
+
+Su princpio es usar una cola de eventos unica para N hebras. El numero de hebras debe ser cercano o igual
+al numero de nucleos. Ademas existe una hebra adicional (la inicial) que espera eventos del tipo "nueva conexion" de
+sockets que esten escuchando (listening), tambien realiza tareas de mantencion, como: Liberar memoria de elementos
+desechados y verificar que el tiempo de espera por un evento no se ha cumplido.
+
+La distribucion de la carga entre las N hebras no es forzada, es solo una consecuencia. Mientras mas carga tenga una hebra,
+esto es, mientras mas se demore en volver a sacar eventos de la cola, otra hebra tendra mas chance de hacer esto mismo. 
+
+English:
