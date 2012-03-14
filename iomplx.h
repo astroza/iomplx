@@ -31,6 +31,7 @@ typedef struct _iomplx_item iomplx_item;
 typedef int (*ev_call1)(iomplx_item *);
 typedef void *(*alloc_func)(unsigned long);
 typedef void (*free_func)(void *);
+typedef void (*init_func)();
 
 typedef union {
 	struct {
@@ -82,6 +83,7 @@ typedef struct {
 	iomplx_monitor monitor;
 	alloc_func item_alloc;
 	free_func item_free;
+	init_func thread_init;
 } iomplx_instance;
 
 #define IOMPLX_READ	UQUEUE_READ_EVENT
@@ -98,7 +100,7 @@ void iomplx_callbacks_init(iomplx_item *);
 
 iomplx_item *iomplx_item_add(iomplx_instance *, iomplx_item *, int);
 
-void iomplx_init(iomplx_instance *, alloc_func, free_func, unsigned int, unsigned int);
+void iomplx_init(iomplx_instance *, alloc_func, free_func, init_func, unsigned int, unsigned int);
 void iomplx_launch(iomplx_instance *);
 
 static inline void iomplx_item_filter_set(iomplx_item *item, int filter)

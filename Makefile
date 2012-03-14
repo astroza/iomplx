@@ -1,8 +1,8 @@
 CC=gcc
-CFLAGS=-g -Wall
+CFLAGS=-Wall -O3
 INCLUDE=-I.
 
-SRC=example.c \
+SRC= \
     dlist.c \
     iomplx.c \
     iomplx_inet.c
@@ -21,17 +21,20 @@ UQUEUE_SRC=backend/$(shell echo $(UQUEUE) | tr A-Z a-z).c
 SRC+=$(UQUEUE_SRC)
 
 OBJ=$(SRC:.c=.o)
-all: prepare example
+all: prepare lib
 	@echo "Done"
 
 prepare:
 	mkdir -p objs/backend
 
-example: $(OBJ)
-	cd objs; $(CC) $^ -o ../example -lpthread
+lib: $(OBJ)
+	cd objs; $(CC) -shared -fPIC $^ -o ../iomplx.so -lpthread
 
 %.o: %.c
-	$(CC) -D$(UQUEUE) $(include) $? -c $(CFLAGS) $(INCLUDE) -o objs/$@
+	$(CC) -fPIC -D$(UQUEUE) $? -c $(CFLAGS) $(INCLUDE) -o objs/$@
+
+example: prepare lib
+	$(CC) -D$(UQUEUE) example.c $(CFLAGS) $(INCLUDE) $(PWD)/iomplx.so -o $@
 
 clean:
-	rm -fr objs example
+	rm -fr objs iomplx.so example

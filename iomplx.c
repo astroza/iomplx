@@ -115,6 +115,9 @@ static void iomplx_thread_n(iomplx_instance *mplx)
 {
 	iomplx_event ev;
 
+	if(mplx->thread_init)
+		mplx->thread_init();
+
 	iomplx_event_init(&ev);
 	do {
 		uqueue_wait(&mplx->n_queue, &ev, -1);
@@ -161,10 +164,11 @@ iomplx_item *iomplx_item_add(iomplx_instance *mplx, iomplx_item *item, int liste
 	return item_copy;
 }
 
-void iomplx_init(iomplx_instance *mplx, alloc_func alloc, free_func free, unsigned int threads, unsigned int timeout_granularity)
+void iomplx_init(iomplx_instance *mplx, alloc_func alloc, free_func free, init_func init, unsigned int threads, unsigned int timeout_granularity)
 {
 	mplx->item_alloc = alloc;
 	mplx->item_free = free;
+	mplx->thread_init = init;
 	mplx->threads = threads;
 	iomplx_monitor_init(&mplx->monitor, timeout_granularity);
 	uqueue_init(&mplx->accept_queue);
