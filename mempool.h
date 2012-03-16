@@ -4,8 +4,8 @@
 #include "dlist.h"
 
 typedef struct {
-	DLIST_NODE(node)
-	void data_addr[];
+	DLIST_NODE(node);
+	char data_addr[];
 } mempool_block_header;
 
 typedef struct {

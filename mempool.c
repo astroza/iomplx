@@ -4,6 +4,7 @@
 void *mempool_init(mempool_instance *mempool, unsigned int obj_size, unsigned int pool_size)
 {
 	void *block;
+	int i;
 
 	/* Block: [Header, data]
 	 * Memory pool: [Block.0, Block.1, Block.2, ..., Block.pool_size-1]
@@ -19,22 +20,22 @@ void *mempool_init(mempool_instance *mempool, unsigned int obj_size, unsigned in
 
 void *mempool_alloc(mempool_instance *mempool)
 {
-	mempool_block_header *hdr;
+	void *block;
 
-	hdr = DLIST_TAIL(mempool);
-	if(!hdr)
+	block = DLIST_TAIL(mempool);
+	if(!block)
 		return NULL;
 
-	DLIST_DEL(hdr);
-	return hdr->data_addr;
+	DLIST_DEL(mempool, block);
+	return ((mempool_block_header *)block)->data_addr;
 }
 
 void mempool_free(mempool_instance *mempool, void *obj)
 {
-	mempool_block_header *hdr;
+	void *block;
 
-	hdr = obj - sizeof(mempool_block_header);
-	DLIST_APPEND(mempool, hdr);
+	block = obj - sizeof(mempool_block_header);
+	DLIST_APPEND(mempool, block);
 }
 
 void mempool_destroy(mempool_instance *mempool)
