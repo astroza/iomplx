@@ -125,13 +125,11 @@ static void iomplx_thread_n(iomplx_instance *mplx)
 
 		ev.item->elapsed_time = 0;
 
-		if(ev.type == IOMPLX_CLOSE_EVENT) {
+		if(ev.item->cb.calls_arr[ev.type](ev.item) == -1 || ev.type == IOMPLX_CLOSE_EVENT) {
 			uqueue_unwatch(&mplx->n_queue, ev.item);
 			close(ev.item->fd);
 			ev.item->fd = -1;
 		}
-
-		ev.item->cb.calls_arr[ev.type](ev.item);
 
 		if(ev.item->new_filter != -1) {
 			uqueue_filter_set(&mplx->n_queue, ev.item);
