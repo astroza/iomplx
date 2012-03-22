@@ -65,8 +65,9 @@ void iomplx_callbacks_init(iomplx_item *item)
 static void iomplx_do_maintenance(iomplx_instance *mplx, unsigned long *start_time)
 {
 	iomplx_item *item;
+	time_t cur_time = time(NULL);
 	
-	if(time(NULL) - *start_time >= mplx->monitor.timeout_granularity) {
+	if(cur_time - *start_time >= mplx->monitor.timeout_granularity) {
 		DLIST_FOREACH(&mplx->monitor AS item) {
 			/* Free closed item */
 			if(item->fd == -1) {
@@ -79,7 +80,7 @@ static void iomplx_do_maintenance(iomplx_instance *mplx, unsigned long *start_ti
 			if(item->elapsed_time >= item->timeout && item->cb.ev_timeout(item) == -1)
 				shutdown(item->fd, SHUT_RDWR);
 		}
-		*start_time = time(NULL);
+		*start_time = cur_time;
 	}
 }
 
