@@ -4,6 +4,7 @@ INCLUDE=-I.
 
 SRC= \
     dlist.c \
+    mempool.c \
     iomplx.c \
     iomplx_inet.c
 

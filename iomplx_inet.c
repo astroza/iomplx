@@ -32,6 +32,7 @@ int iomplx_inet_listen(iomplx_instance *mplx, const char *addr, unsigned short p
 		goto error;
 
 	local_item.data = data;
+	local_item.oneshot = 0;
 	local_item.new_filter = IOMPLX_READ;
 	iomplx_callbacks_init(&local_item);
 	local_item.cb.ev_accept = ev_accept;

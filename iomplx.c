@@ -62,6 +62,52 @@ void iomplx_callbacks_init(iomplx_item *item)
 	memcpy(&item->cb, &iomplx_dummy_calls, sizeof(iomplx_callbacks));
 }
 
+static void iomplx_work_init(iomplx_work *work, unsigned int actions_number)
+{
+	DLIST_INIT(&work->actions_list);
+	mempool_init(&work->actions_pool, sizeof(iomplx_action), actions_number);
+	work->actions_count = 0;
+}
+
+static int iomplx_work_action_add(iomplx_work *work, iomplx_item *item, unsigned char action_idx)
+{
+	iomplx_action *action;
+
+	action = mempool_alloc(&work->actions_pool);
+	if(!action)
+		return -1;
+
+	DLIST_APPEND(&work->actions_list, action_idx);
+	work->actions_count++;
+	return 0;
+}
+
+static void iomplx_work_action_del(iomplx_work *work, iomplx_action *action)
+{
+	DLIST_DEL(&work->actions_list, action);
+	mempool_free(&work->actions_pool, action);
+	work->actions_count--;
+}
+
+static void iomplx_work_populate(iomplx_work *work, uqueue *q)
+{
+	int timeout;
+	unsigned int rmg;
+	iomplx_event ev;
+
+	if(work->actions_count >= IOMPLX_WORK_ACTIONS)
+		return;
+
+	iomplx_event_init(&ev);
+	timeout = work->actions_count == 0? -1 : 0;
+
+	q->max_events = EVENTS - work->actions_count;
+	do {
+		rmg = uqueue_event_get(q, &ev, timeout);
+		iomplx_work_action_add(work, ev.item, ev.type);
+	} while(rmg != 0);
+}
+
 static void iomplx_do_maintenance(iomplx_instance *mplx, unsigned long *start_time)
 {
 	iomplx_item *item;
@@ -92,10 +138,11 @@ static void iomplx_thread_0(iomplx_instance *mplx)
 
 	iomplx_event_init(&ev);
 	do {
-		if(uqueue_wait(&mplx->accept_queue, &ev, mplx->monitor.timeout_granularity)) {
+		if(uqueue_event_get(&mplx->accept_queue, &ev, mplx->monitor.timeout_granularity) != -1) {
 
 			iomplx_callbacks_init(&local_item);
 			local_item.new_filter = IOMPLX_READ;
+			local_item.oneshot = 1;
 			local_item.sa_size = ev.item->sa_size;
 			local_item.fd = accept_and_set(ev.item->fd, &local_item.sa, &local_item.sa_size);
 
@@ -114,27 +161,34 @@ static void iomplx_thread_0(iomplx_instance *mplx)
 
 static void iomplx_thread_n(iomplx_instance *mplx)
 {
-	iomplx_event ev;
+	iomplx_work work;
+	iomplx_action *action;
+	iomplx_item *item;
+	int ret;
 
 	if(mplx->thread_init)
 		mplx->thread_init();
 
+	iomplx_work_init(&work, IOMPLX_WORK_ACTIONS);
 	iomplx_event_init(&ev);
+
 	do {
-		uqueue_wait(&mplx->n_queue, &ev, -1);
+		iomplx_work_populate(&work, &mplx->n_queue);
 
-		ev.item->elapsed_time = 0;
-
-		if(ev.item->cb.calls_arr[ev.type](ev.item) == -1 || ev.type == IOMPLX_CLOSE_EVENT) {
-			uqueue_unwatch(&mplx->n_queue, ev.item);
-			close(ev.item->fd);
-			ev.item->fd = -1;
+		DLIST_FOREACH(&work.actions_list AS action) {
+			item = action->item;
+			ret = item->cb.calls_arr[action->call_idx](item);
+			if(ret == -1 || call_idx == IOMPLX_CLOSE_EVENT) {
+				uqueue_unwatch(&mplx->n_queue, item);
+				close(item->fd);
+				item->fd = -1;
+				iomplx_work_action_del(&work.actions_list, action);
+			} else if(ret == IOMPLX_ITEM_BUSY) {
+				uqueue_activate(&mplx->n_queue, item);
+				iomplx_work_action_del(&work.actions_list, action);
+			}
 		}
 
-		if(ev.item->new_filter != -1) {
-			uqueue_filter_set(&mplx->n_queue, ev.item);
-			ev.item->new_filter = -1;
-		}
 	} while(1);
 }
 
@@ -158,7 +212,6 @@ iomplx_item *iomplx_item_add(iomplx_instance *mplx, iomplx_item *item, int liste
 		uqueue_watch(&mplx->n_queue, item_copy);
 
 	item_copy->elapsed_time = 0;
-	item_copy->new_filter = -1;
 
 	return item_copy;
 }

@@ -19,12 +19,15 @@
 
 #ifndef IOMPLX_H
 #include <dlist.h>
+#include <mempool.h>
 #include <sys/socket.h>
 
 #define IOMPLX_READ_EVENT	1
 #define IOMPLX_WRITE_EVENT	2
 #define IOMPLX_TIMEOUT_EVENT	3
 #define IOMPLX_CLOSE_EVENT	4
+
+#define IOMPLX_WORK_ACTIONS	EVENTS
 
 typedef struct _iomplx_item iomplx_item;
 
@@ -50,7 +53,9 @@ typedef union {
 struct _iomplx_item {
 	DLIST_NODE(item);
 	int fd;
+	int filter;
 	int new_filter;
+	unsigned char oneshot;
 	iomplx_callbacks cb;
 	int timeout;
 	int elapsed_time;
@@ -77,8 +82,8 @@ typedef struct {
 } iomplx_event;
 
 typedef struct {
-	uqueue n_queue;
-	uqueue accept_queue;
+	uqueue n_uqueue;
+	uqueue accept_uqueue;
 	int threads;
 	iomplx_monitor monitor;
 	alloc_func item_alloc;
@@ -86,14 +91,29 @@ typedef struct {
 	init_func thread_init;
 } iomplx_instance;
 
+/* Each thread_n has a work structure. The work are actions. 
+ */
+typedef struct {
+	DLIST_NODE(node);
+	iomplx_item *item;
+	unsigned char call_idx;
+} iomplx_action;
+
+typedef struct {
+	dlist actions_list;
+	mempool_instance actions_pool;
+	unsigned int actions_count;
+} iomplx_work;
+
 #define IOMPLX_READ	UQUEUE_READ_EVENT
 #define IOMPLX_WRITE	UQUEUE_WRITE_EVENT
 
 void uqueue_init(uqueue *);
 void uqueue_event_init(iomplx_event *);
-int uqueue_wait(uqueue *, iomplx_event *, int);
+int uqueue_event_get(uqueue *, iomplx_event *, int);
 void uqueue_watch(uqueue *, iomplx_item *);
 void uqueue_unwatch(uqueue *, iomplx_item *);
+void uqueue_active(uqueue *q, iomplx_item *item);
 void uqueue_filter_set(uqueue *, iomplx_item *);
 int accept_and_set(int, struct sockaddr *, unsigned int *);
 void iomplx_callbacks_init(iomplx_item *);
