@@ -33,9 +33,10 @@ void uqueue_event_init(iomplx_event *ev)
 {
 	ev->data.events_count = 0;
 	ev->data.current_event = 0;
+	ev->max_events = EVENTS;
 }
 
-int uqueue_wait(uqueue *q, iomplx_event *ev, int timeout)
+int uqueue_event_get(uqueue *q, iomplx_event *ev, int timeout)
 {
 	struct kevent *ke;
 	struct timespec ts, *pts;
@@ -57,7 +58,7 @@ int uqueue_wait(uqueue *q, iomplx_event *ev, int timeout)
 		q->changes_count = 0;
 
 		if(wait_ret == 0) 
-			return 0;
+			return -1;
 
 		ev->data.events_count = wait_ret;
 		ev->data.current_event = 0;
@@ -72,14 +73,19 @@ int uqueue_wait(uqueue *q, iomplx_event *ev, int timeout)
 		ev->type = IOMPLX_READ_EVENT;
 	else if(ke->filter == EVFILT_WRITE)
 		ev->type = IOMPLX_WRITE_EVENT;
-	return 1;
+
+	return ev->data.events_count - ev->data.current_event - 1;
 }
 
 void uqueue_watch(uqueue *q, iomplx_item *item)
 {
 	struct kevent c;
-	
-	EV_SET(&c, item->fd, EVFILT_READ, EV_ADD|EV_CLEAR|EV_ENABLE|EV_RECEIPT, 0, 0, item);
+	int ext_flags = 0;
+
+	if(item->oneshot)
+		ext_flags |= EV_ONESHOT;
+
+	EV_SET(&c, item->fd, EVFILT_READ, EV_ADD|EV_CLEAR|EV_ENABLE|EV_RECEIPT|ext_flags, 0, 0, item);
 	kevent(q->kqueue_iface, &c, 1, NULL, 0, NULL);
 }
 
@@ -87,9 +93,19 @@ void uqueue_unwatch(uqueue *q, iomplx_item *item)
 {
 }
 
+void uqueue_activate(uqueue *q, iomplx_item *item)
+{
+	uqueue_watch(q, item);
+}
+
 void uqueue_filter_set(uqueue *q, iomplx_item *item)
 {
-	EV_SET(q->changes + q->changes_count, item->fd, item->new_filter, EV_ADD|EV_ENABLE|EV_CLEAR, 0, 0, item);
+	int ext_flags = 0;
+
+	if(item->oneshot)
+		ext_flags |= EV_ONESHOT;
+
+	EV_SET(q->changes + q->changes_count, item->fd, item->new_filter, EV_ADD|EV_ENABLE|EV_CLEAR|ext_flags, 0, 0, item);
 	q->changes_count++;
 }
 
