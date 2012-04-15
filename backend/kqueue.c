@@ -29,21 +29,21 @@ void uqueue_init(uqueue *q)
 	q->changes_count = 0;
 }
 
-void uqueue_event_init(iomplx_event *ev)
+void uqueue_event_init(iomplx_waiter *waiter)
 {
-	ev->data.events_count = 0;
-	ev->data.current_event = 0;
-	ev->max_events = EVENTS;
+	waiter->data.events_count = 0;
+	waiter->data.current_event = 0;
+	waiter->max_events = EVENTS;
 }
 
-int uqueue_event_get(uqueue *q, iomplx_event *ev, int timeout)
+int uqueue_event_get(uqueue *q, iomplx_waiter *waiter, int timeout)
 {
 	struct kevent *ke;
 	struct timespec ts, *pts;
 	int wait_ret;
 
-	ev->data.current_event++;
-	if(ev->data.events_count <= ev->data.current_event) {
+	waiter->data.current_event++;
+	if(waiter->data.events_count <= waiter->data.current_event) {
 		do {
 			if(timeout < 0)
 				pts = NULL;
@@ -53,28 +53,28 @@ int uqueue_event_get(uqueue *q, iomplx_event *ev, int timeout)
 				pts = &ts;
 			}
 			wait_ret = kevent(q->kqueue_iface, q->changes, 
-			q->changes_count, ev->data.events, EVENTS, pts);
+			q->changes_count, waiter->data.events, EVENTS, pts);
 		} while(wait_ret == -1 && errno == EINTR);
 		q->changes_count = 0;
 
 		if(wait_ret == 0) 
 			return -1;
 
-		ev->data.events_count = wait_ret;
-		ev->data.current_event = 0;
+		waiter->data.events_count = wait_ret;
+		waiter->data.current_event = 0;
 	}
 
-	ke = ev->data.events + ev->data.current_event;
-	ev->item = ke->udata;
-	assert(ev->item != NULL);
+	ke = waiter->data.events + waiter->data.current_event;
+	waiter->item = ke->udata;
+	assert(waiter->item != NULL);
 	if(ke->flags & EV_EOF)
-		ev->type = IOMPLX_CLOSE_EVENT;
+		waiter->type = IOMPLX_CLOSE_EVENT;
 	else if(ke->filter == EVFILT_READ)
-		ev->type = IOMPLX_READ_EVENT;
+		waiter->type = IOMPLX_READ_EVENT;
 	else if(ke->filter == EVFILT_WRITE)
-		ev->type = IOMPLX_WRITE_EVENT;
+		waiter->type = IOMPLX_WRITE_EVENT;
 
-	return ev->data.events_count - ev->data.current_event - 1;
+	return waiter->data.events_count - waiter->data.current_event - 1;
 }
 
 void uqueue_watch(uqueue *q, iomplx_item *item)

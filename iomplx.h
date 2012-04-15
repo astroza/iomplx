@@ -27,7 +27,7 @@
 #define IOMPLX_TIMEOUT_EVENT	3
 #define IOMPLX_CLOSE_EVENT	4
 
-#define IOMPLX_WORK_ACTIONS	EVENTS
+#define IOMPLX_ITEM_CALLS	EVENTS
 
 #define IOMPLX_ITEM_WOULDBLOCK	-2
 #define IOMPLX_ITEM_CLOSE	-1
@@ -80,10 +80,11 @@ typedef struct {
 
 typedef struct {
 	uqueue_events data;
-	unsigned char type;
+
 	unsigned int max_events;
 	iomplx_item *item;
-} iomplx_event;
+	unsigned char type;
+} iomplx_waiter;
 
 typedef struct {
 	uqueue n_uqueue;
@@ -95,26 +96,24 @@ typedef struct {
 	init_func thread_init;
 } iomplx_instance;
 
-/* Each thread_n has a work structure. The work are actions. 
- */
 typedef struct {
 	DLIST_NODE(node);
 	iomplx_item *item;
 	unsigned char call_idx;
-} iomplx_action;
+} iomplx_item_call;
 
 typedef struct {
-	dlist actions_list;
-	mempool_instance actions_pool;
-	unsigned int actions_count;
-} iomplx_work;
+	dlist calls_list;
+	mempool_instance calls_pool;
+	unsigned int calls_count;
+} iomplx_active_list;
 
 #define IOMPLX_READ	UQUEUE_READ_EVENT
 #define IOMPLX_WRITE	UQUEUE_WRITE_EVENT
 
 void uqueue_init(uqueue *);
-void uqueue_event_init(iomplx_event *);
-int uqueue_event_get(uqueue *, iomplx_event *, int);
+void uqueue_event_init(iomplx_waiter *);
+int uqueue_event_get(uqueue *, iomplx_waiter *, int);
 void uqueue_watch(uqueue *, iomplx_item *);
 void uqueue_unwatch(uqueue *, iomplx_item *);
 void uqueue_activate(uqueue *q, iomplx_item *item);

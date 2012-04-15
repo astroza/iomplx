@@ -36,42 +36,42 @@ void uqueue_init(uqueue *q)
 	q->epoll_iface = epoll_create(EPOLL_QUEUE_SIZE);
 }
 
-void uqueue_event_init(iomplx_event *ev)
+void uqueue_event_init(iomplx_waiter *waiter)
 {
-	ev->data.events_count = 0;
-	ev->data.current_event = 0;
-	ev->max_events = EVENTS;
+	waiter->data.events_count = 0;
+	waiter->data.current_event = 0;
+	waiter->max_events = EVENTS;
 }
 
-int uqueue_event_get(uqueue *q, iomplx_event *ev, int timeout)
+int uqueue_event_get(uqueue *q, iomplx_waiter *waiter, int timeout)
 {
 	struct epoll_event *ee;
 	int wait_ret;
 
-	ev->data.current_event++;
+	waiter->data.current_event++;
 
-	if(ev->data.events_count <= ev->data.current_event) {
+	if(waiter->data.events_count <= waiter->data.current_event) {
 		do
-			wait_ret = epoll_wait(q->epoll_iface, ev->data.events, ev->max_events, timeout*1000);
+			wait_ret = epoll_wait(q->epoll_iface, waiter->data.events, waiter->max_events, timeout*1000);
 		while(wait_ret == -1 && errno == EINTR);
 		
 		if(wait_ret == 0)
 			return -1;
 
-		ev->data.events_count = wait_ret;
-		ev->data.current_event = 0;
+		waiter->data.events_count = wait_ret;
+		waiter->data.current_event = 0;
 	}
 
-	ee = ev->data.events + ev->data.current_event;
+	ee = waiter->data.events + waiter->data.current_event;
 	if(ee->events & (EPOLLRDHUP|EPOLLERR|EPOLLHUP))
-		ev->type = IOMPLX_CLOSE_EVENT;
+		waiter->type = IOMPLX_CLOSE_EVENT;
 	else if(ee->events & EPOLLIN)
-		ev->type = IOMPLX_READ_EVENT;
+		waiter->type = IOMPLX_READ_EVENT;
 	else if(ee->events & EPOLLOUT)
-		ev->type = IOMPLX_WRITE_EVENT;
-	ev->item = ee->data.ptr;
+		waiter->type = IOMPLX_WRITE_EVENT;
+	waiter->item = ee->data.ptr;
 
-	return ev->data.events_count - ev->data.current_event - 1;
+	return waiter->data.events_count - waiter->data.current_event - 1;
 }
 
 void uqueue_watch(uqueue *q, iomplx_item *item)
