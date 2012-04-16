@@ -107,7 +107,7 @@ static void iomplx_active_list_populate(iomplx_active_list *active_list, uqueue 
 	waiter.max_events = EVENTS - active_list->calls_count;
 	do {
 		rmg = uqueue_event_get(q, &waiter, timeout);
-		if(rmg != -1)
+		if(rmg != -1 && (waiter.type == IOMPLX_CLOSE_EVENT || iomplx_active_set(waiter.item)))
 			iomplx_active_list_call_add(active_list, waiter.item, waiter.type);
 	} while(rmg > 0);
 }
@@ -127,8 +127,10 @@ static void iomplx_do_maintenance(iomplx_instance *mplx, unsigned long *start_ti
 			}
 			/* Timeout check */
 			item->elapsed_time++;
-			if(item->elapsed_time >= item->timeout && item->cb.ev_timeout(item) == -1)
-				shutdown(item->fd, SHUT_RDWR);
+			if(item->elapsed_time >= item->timeout && item->cb.ev_timeout(item) == -1) {
+				if(iomplx_timeout_tryset(item))
+					shutdown(item->fd, SHUT_RDWR);
+			}
 		}
 		*start_time = cur_time;
 	}
@@ -186,9 +188,11 @@ static void iomplx_thread_n(iomplx_instance *mplx)
 				close(item->fd);
 				item->fd = -1;
 				iomplx_active_list_call_del(&active_list, item_call);
+				iomplx_active_unset(item);
 			} else if(ret == IOMPLX_ITEM_WOULDBLOCK) {
 				uqueue_rewatch(&mplx->n_uqueue, item);
 				iomplx_active_list_call_del(&active_list, item_call);
+				iomplx_active_unset(item);
 			} else if(item->new_filter != IOMPLX_NONE) {
 				if(item->new_filter == IOMPLX_WRITE)
 					item_call->call_idx = IOMPLX_WRITE_EVENT;
@@ -217,6 +221,7 @@ iomplx_item *iomplx_item_add(iomplx_instance *mplx, iomplx_item *item, int liste
 	item_copy->fd = item->fd;
 	item_copy->timeout = item->timeout;
 	item_copy->oneshot = item->oneshot;
+	item_copy->active = 0;
 	item_copy->data = item->data;
 
 	if(listening)

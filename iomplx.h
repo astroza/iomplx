@@ -62,6 +62,7 @@ struct _iomplx_item {
 	iomplx_callbacks cb;
 	int timeout;
 	int elapsed_time;
+	int active;
 	void *data;
 	union {
 		struct {
@@ -130,6 +131,21 @@ void iomplx_launch(iomplx_instance *);
 static inline void iomplx_item_filter_set(iomplx_item *item, int filter)
 {
         item->new_filter = filter;
+}
+
+static inline int iomplx_timeout_tryset(iomplx_item *item)
+{
+	return __sync_bool_compare_and_swap(&item->active, 0, -1);
+}
+
+static inline int iomplx_active_set(iomplx_item *item)
+{
+	return __sync_bool_compare_and_swap(&item->active, 0, 1);
+}
+
+static inline void iomplx_active_unset(iomplx_item *item)
+{
+	__sync_bool_compare_and_swap(&item->active, 1, 0);
 }
 
 #endif
