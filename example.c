@@ -4,18 +4,36 @@
 #include <iomplx.h>
 #include <iomplx_inet.h>
 
-int demo_receive(iomplx_item *item)
+struct echo_buffer
 {
 	char buf[64];
+	unsigned len;
+};
+
+int demo_receive(iomplx_item *item)
+{
+	struct echo_buffer *eb = item->data;
+
+	eb->len = recv(item->fd, eb->buf, sizeof(eb->buf), 0);
+	if(eb->len == -1)
+		return IOMPLX_ITEM_WOULDBLOCK;
+
+	puts("RECEIVE");
+	iomplx_item_filter_set(item, IOMPLX_WRITE);
+
+	return 0;
+}
+
+int demo_send(iomplx_item *item)
+{
+	struct echo_buffer *eb = item->data;
 	int r;
-	puts("READ");
-	r = read(item->fd, buf, sizeof(buf)-1);
+
+	r = send(item->fd, eb->buf, eb->len, 0);
 	if(r == -1)
 		return IOMPLX_ITEM_WOULDBLOCK;
 
-	buf[r] = 0;
-	printf("buf=%s", buf);
-
+	iomplx_item_filter_set(item, IOMPLX_READ);
 	return 0;
 }
 
@@ -34,9 +52,11 @@ int demo_disconnect(iomplx_item *item)
 int demo_accept(iomplx_item *item)
 {
 	item->cb.ev_read = demo_receive;
+	item->cb.ev_write = demo_send;
 	item->cb.ev_timeout = demo_timeout;
 	item->cb.ev_close = demo_disconnect;
 	item->timeout = 2;
+	item->data = malloc(sizeof(struct echo_buffer));
 	return 0;
 }
 

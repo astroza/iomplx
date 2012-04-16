@@ -187,8 +187,16 @@ static void iomplx_thread_n(iomplx_instance *mplx)
 				item->fd = -1;
 				iomplx_active_list_call_del(&active_list, item_call);
 			} else if(ret == IOMPLX_ITEM_WOULDBLOCK) {
-				uqueue_activate(&mplx->n_uqueue, item);
+				uqueue_rewatch(&mplx->n_uqueue, item);
 				iomplx_active_list_call_del(&active_list, item_call);
+			} else if(item->new_filter != IOMPLX_NONE) {
+				if(item->new_filter == IOMPLX_WRITE)
+					item_call->call_idx = IOMPLX_WRITE_EVENT;
+				else if(item->new_filter == IOMPLX_READ)
+					item_call->call_idx = IOMPLX_READ_EVENT;
+
+				item->filter = item->new_filter;
+				item->new_filter = IOMPLX_NONE;
 			}
 		}
 
@@ -209,6 +217,7 @@ iomplx_item *iomplx_item_add(iomplx_instance *mplx, iomplx_item *item, int liste
 	item_copy->fd = item->fd;
 	item_copy->timeout = item->timeout;
 	item_copy->oneshot = item->oneshot;
+	item_copy->data = item->data;
 
 	if(listening)
 		uqueue_watch(&mplx->accept_uqueue, item_copy);

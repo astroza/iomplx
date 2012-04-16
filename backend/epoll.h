@@ -34,5 +34,6 @@ typedef struct {
 
 #define UQUEUE_READ_EVENT	EPOLLIN
 #define UQUEUE_WRITE_EVENT	EPOLLOUT
+#define UQUEUE_NONE		-1
 
 #endif

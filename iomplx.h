@@ -110,13 +110,14 @@ typedef struct {
 
 #define IOMPLX_READ	UQUEUE_READ_EVENT
 #define IOMPLX_WRITE	UQUEUE_WRITE_EVENT
+#define IOMPLX_NONE	UQUEUE_NONE
 
 void uqueue_init(uqueue *);
 void uqueue_event_init(iomplx_waiter *);
 int uqueue_event_get(uqueue *, iomplx_waiter *, int);
 void uqueue_watch(uqueue *, iomplx_item *);
 void uqueue_unwatch(uqueue *, iomplx_item *);
-void uqueue_activate(uqueue *q, iomplx_item *item);
+void uqueue_rewatch(uqueue *q, iomplx_item *item);
 void uqueue_filter_set(uqueue *, iomplx_item *);
 int accept_and_set(int, struct sockaddr *, unsigned int *);
 void iomplx_callbacks_init(iomplx_item *);

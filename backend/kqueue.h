@@ -34,11 +34,9 @@ typedef struct {
 
 typedef struct {
 	int kqueue_iface;
-	struct kevent changes[EVENTS];
-	unsigned int changes_count;
 } uqueue;
 
 #define UQUEUE_READ_EVENT	EVFILT_READ
 #define UQUEUE_WRITE_EVENT	EVFILT_WRITE
-
+#define UQUEUE_NONE		0
 #endif

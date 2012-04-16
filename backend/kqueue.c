@@ -26,7 +26,6 @@ extern int errno;
 void uqueue_init(uqueue *q)
 {
 	q->kqueue_iface = kqueue();
-	q->changes_count = 0;
 }
 
 void uqueue_event_init(iomplx_waiter *waiter)
@@ -52,10 +51,9 @@ int uqueue_event_get(uqueue *q, iomplx_waiter *waiter, int timeout)
 				ts.tv_nsec = 0;
 				pts = &ts;
 			}
-			wait_ret = kevent(q->kqueue_iface, q->changes, 
-			q->changes_count, waiter->data.events, EVENTS, pts);
+			wait_ret = kevent(q->kqueue_iface, NULL, 
+			0, waiter->data.events, EVENTS, pts);
 		} while(wait_ret == -1 && errno == EINTR);
-		q->changes_count = 0;
 
 		if(wait_ret == 0) 
 			return -1;
@@ -85,28 +83,27 @@ void uqueue_watch(uqueue *q, iomplx_item *item)
 	if(item->oneshot)
 		ext_flags |= EV_ONESHOT;
 
-	EV_SET(&c, item->fd, EVFILT_READ, EV_ADD|EV_CLEAR|EV_ENABLE|EV_RECEIPT|ext_flags, 0, 0, item);
+	EV_SET(&c, item->fd, item->new_filter, EV_ADD|EV_CLEAR|EV_ENABLE|EV_RECEIPT|ext_flags, 0, 0, item);
 	kevent(q->kqueue_iface, &c, 1, NULL, 0, NULL);
+	item->filter = item->new_filter;
+	item->new_filter = IOMPLX_NONE;
 }
 
 void uqueue_unwatch(uqueue *q, iomplx_item *item)
 {
 }
 
-void uqueue_activate(uqueue *q, iomplx_item *item)
+void uqueue_rewatch(uqueue *q, iomplx_item *item)
 {
+	if(item->new_filter == IOMPLX_NONE)
+		item->new_filter = item->filter;
+
 	uqueue_watch(q, item);
 }
 
 void uqueue_filter_set(uqueue *q, iomplx_item *item)
 {
-	int ext_flags = 0;
-
-	if(item->oneshot)
-		ext_flags |= EV_ONESHOT;
-
-	EV_SET(q->changes + q->changes_count, item->fd, item->new_filter, EV_ADD|EV_ENABLE|EV_CLEAR|ext_flags, 0, 0, item);
-	q->changes_count++;
+	uqueue_watch(q, item);
 }
 
 int accept_and_set(int fd, struct sockaddr *sa, unsigned int *sa_size)
