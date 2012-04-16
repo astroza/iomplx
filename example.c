@@ -45,6 +45,7 @@ int demo_timeout(iomplx_item *item)
 
 int demo_disconnect(iomplx_item *item)
 {
+	free(item->data);
 	puts("DISCONNECT");
 	return 0;
 }
