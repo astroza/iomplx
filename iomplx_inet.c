@@ -2,13 +2,14 @@
 #include <arpa/inet.h>
 #include <iomplx.h>
 #include <iomplx_inet.h>
+#include <sys/ioctl.h>
 #include <unistd.h>
 
 int iomplx_inet_listen(iomplx_instance *mplx, const char *addr, unsigned short port, ev_call1 ev_accept, void *data)
 {
 	iomplx_item local_item, *item;
 	struct sockaddr_in *sa;
-	int ret;
+	int ret, set = 1;
 	int status = 1;
 
 	local_item.fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -29,6 +30,9 @@ int iomplx_inet_listen(iomplx_instance *mplx, const char *addr, unsigned short p
 		goto error;
 
 	if(listen(local_item.fd, IOMPLX_CONF_BACKLOG) == -1)
+		goto error;
+
+	if(ioctl(local_item.fd, FIONBIO, &set) == -1)
 		goto error;
 
 	local_item.data = data;

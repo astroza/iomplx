@@ -93,7 +93,7 @@ static void iomplx_active_list_call_del(iomplx_active_list *active_list, iomplx_
 	active_list->available_item_calls++;
 }
 
-static void iomplx_active_list_populate(iomplx_active_list *active_list, uqueue *q)
+static void iomplx_active_list_populate(iomplx_active_list *active_list, uqueue *q, int wait_timeout)
 {
 	int timeout;
 	int rmg;
@@ -105,7 +105,7 @@ static void iomplx_active_list_populate(iomplx_active_list *active_list, uqueue 
 	iomplx_waiter_init(&waiter);
 
 	if(DLIST_ISEMPTY(active_list))
-		timeout = -1;
+		timeout = wait_timeout;
 	else
 		timeout = 0;
 
@@ -121,7 +121,7 @@ static void iomplx_do_maintenance(iomplx_instance *mplx, unsigned long *start_ti
 {
 	iomplx_item *item;
 	time_t cur_time = time(NULL);
-	
+
 	if(cur_time - *start_time >= mplx->monitor.timeout_granularity) {
 		DLIST_FOREACH(&mplx->monitor AS item) {
 			/* Free closed item */
@@ -143,31 +143,34 @@ static void iomplx_do_maintenance(iomplx_instance *mplx, unsigned long *start_ti
 
 static void iomplx_thread_0(iomplx_instance *mplx)
 {
-	iomplx_item *item, local_item;
-	iomplx_waiter waiter;
+	iomplx_item *item, *new_item, local_item;
+	iomplx_active_list active_list;
+	iomplx_item_call *item_call;
 	unsigned long start_time = time(NULL);
 
-	iomplx_waiter_init(&waiter);
-	
-	do {
-		if(uqueue_event_get(&mplx->accept_uqueue, &waiter, mplx->monitor.timeout_granularity) != -1) {
+	iomplx_active_list_init(&active_list, mplx->active_list_size[THREAD_0]);
 
+	do {
+		iomplx_active_list_populate(&active_list, &mplx->accept_uqueue, mplx->monitor.timeout_granularity);
+
+		DLIST_FOREACH(&active_list AS item_call) {
+			item = item_call->item;
 			iomplx_callbacks_init(&local_item);
 			local_item.new_filter = IOMPLX_READ;
-			local_item.sa_size = waiter.item->sa_size;
+			local_item.sa_size = item->sa_size;
 			local_item.oneshot = 1;
-			local_item.fd = accept_and_set(waiter.item->fd, &local_item.sa, &local_item.sa_size);
+			local_item.fd = accept_and_set(item->fd, &local_item.sa, &local_item.sa_size);
 
 			if(local_item.fd != -1) {
-				if(waiter.item->cb.ev_accept(&local_item) < 0 || !(item = iomplx_item_add(mplx, &local_item, 0)))
+				if(item->cb.ev_accept(&local_item) < 0 || !(new_item = iomplx_item_add(mplx, &local_item, 0)))
 					close(local_item.fd);
 				else
-					iomplx_monitor_add(&mplx->monitor, item);
-			}
+					iomplx_monitor_add(&mplx->monitor, new_item);
+			} else
+				iomplx_active_list_call_del(&active_list, item_call);
 		}
-
 		iomplx_do_maintenance(mplx, &start_time);
-		
+
 	} while(1);
 }
 
@@ -184,7 +187,7 @@ static void iomplx_thread_n(iomplx_instance *mplx)
 	iomplx_active_list_init(&active_list, mplx->active_list_size[THREAD_N]);
 
 	do {
-		iomplx_active_list_populate(&active_list, &mplx->n_uqueue);
+		iomplx_active_list_populate(&active_list, &mplx->n_uqueue, -1);
 
 		DLIST_FOREACH(&active_list AS item_call) {
 			item = item_call->item;
