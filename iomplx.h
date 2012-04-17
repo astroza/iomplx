@@ -148,9 +148,9 @@ static inline int iomplx_active_set(iomplx_item *item)
 	return __sync_bool_compare_and_swap(&item->active, 0, 1);
 }
 
-static inline void iomplx_active_unset(iomplx_item *item)
+static inline int iomplx_active_unset(iomplx_item *item)
 {
-	__sync_bool_compare_and_swap(&item->active, 1, 0);
+	return __sync_bool_compare_and_swap(&item->active, 1, 0);
 }
 
 #endif

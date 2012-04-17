@@ -160,14 +160,15 @@ static void iomplx_thread_0(iomplx_instance *mplx)
 			local_item.sa_size = item->sa_size;
 			local_item.oneshot = 1;
 			local_item.fd = accept_and_set(item->fd, &local_item.sa, &local_item.sa_size);
-
 			if(local_item.fd != -1) {
 				if(item->cb.ev_accept(&local_item) < 0 || !(new_item = iomplx_item_add(mplx, &local_item, 0)))
 					close(local_item.fd);
 				else
 					iomplx_monitor_add(&mplx->monitor, new_item);
-			} else
+			} else {
 				iomplx_active_list_call_del(&active_list, item_call);
+				iomplx_active_unset(item);
+			}
 		}
 		iomplx_do_maintenance(mplx, &start_time);
 
@@ -192,7 +193,13 @@ static void iomplx_thread_n(iomplx_instance *mplx)
 		DLIST_FOREACH(&active_list AS item_call) {
 			item = item_call->item;
 			ret = item->cb.calls_arr[item_call->call_idx](item);
-			if(ret == IOMPLX_ITEM_CLOSE || item_call->call_idx == IOMPLX_CLOSE_EVENT) {
+
+			if(ret == IOMPLX_ITEM_CLOSE && item_call->call_idx != IOMPLX_CLOSE_EVENT)  {
+				item_call->call_idx = IOMPLX_CLOSE_EVENT;
+				continue;
+			}
+
+			if(item_call->call_idx == IOMPLX_CLOSE_EVENT) {
 				uqueue_unwatch(&mplx->n_uqueue, item);
 				close(item->fd);
 				item->fd = -1;
@@ -250,7 +257,7 @@ void iomplx_init(iomplx_instance *mplx, alloc_func alloc, free_func free, init_f
 	mplx->thread_init = init;
 	mplx->threads = threads;
 	mplx->active_list_size[THREAD_0] = 10;
-	mplx->active_list_size[THREAD_N] = IOMPLX_MAX_ACTIVE_ITEMS/threads + IOMPLX_MAX_ACTIVE_ITEMS%threads != 0? 1 : 0;
+	mplx->active_list_size[THREAD_N] = IOMPLX_MAX_ACTIVE_ITEMS/threads + (IOMPLX_MAX_ACTIVE_ITEMS%threads != 0? 1 : 0);
 	iomplx_monitor_init(&mplx->monitor, timeout_granularity);
 	uqueue_init(&mplx->accept_uqueue);
 	uqueue_init(&mplx->n_uqueue);
