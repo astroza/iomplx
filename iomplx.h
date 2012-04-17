@@ -22,6 +22,8 @@
 #include <mempool.h>
 #include <sys/socket.h>
 
+#define IOMPLX_MAX_ACTIVE_ITEMS 200
+
 #define IOMPLX_READ_EVENT	1
 #define IOMPLX_WRITE_EVENT	2
 #define IOMPLX_TIMEOUT_EVENT	3
@@ -90,7 +92,10 @@ typedef struct {
 typedef struct {
 	uqueue n_uqueue;
 	uqueue accept_uqueue;
-	int threads;
+	unsigned int threads;
+#define THREAD_0 0
+#define THREAD_N 1
+	unsigned int active_list_size[2];
 	iomplx_monitor monitor;
 	alloc_func item_alloc;
 	free_func item_free;
@@ -104,9 +109,9 @@ typedef struct {
 } iomplx_item_call;
 
 typedef struct {
-	dlist calls_list;
-	mempool_instance calls_pool;
-	unsigned int calls_count;
+	dlist item_calls_list;
+	mempool_instance item_calls_pool;
+	unsigned int available_item_calls;
 } iomplx_active_list;
 
 #define IOMPLX_READ	UQUEUE_READ_EVENT

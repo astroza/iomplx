@@ -65,15 +65,15 @@ void iomplx_callbacks_init(iomplx_item *item)
 static void iomplx_active_list_init(iomplx_active_list *active_list, unsigned int calls_number)
 {
 	DLIST_INIT(active_list);
-	mempool_init(&active_list->calls_pool, sizeof(iomplx_item_call), calls_number);
-	active_list->calls_count = 0;
+	mempool_init(&active_list->item_calls_pool, sizeof(iomplx_item_call), calls_number);
+	active_list->available_item_calls = calls_number;
 }
 
 static int iomplx_active_list_call_add(iomplx_active_list *active_list, iomplx_item *item, unsigned char call_idx)
 {
 	iomplx_item_call *item_call;
 
-	item_call = mempool_alloc(&active_list->calls_pool);
+	item_call = mempool_alloc(&active_list->item_calls_pool);
 	if(!item_call)
 		return -1;
 
@@ -81,7 +81,7 @@ static int iomplx_active_list_call_add(iomplx_active_list *active_list, iomplx_i
 	item_call->item = item;
 
 	DLIST_APPEND(active_list, item_call);
-	active_list->calls_count++;
+	active_list->available_item_calls--;
 
 	return 0;
 }
@@ -89,8 +89,8 @@ static int iomplx_active_list_call_add(iomplx_active_list *active_list, iomplx_i
 static void iomplx_active_list_call_del(iomplx_active_list *active_list, iomplx_item_call *call)
 {
 	DLIST_DEL(active_list, call);
-	mempool_free(&active_list->calls_pool, call);
-	active_list->calls_count--;
+	mempool_free(&active_list->item_calls_pool, call);
+	active_list->available_item_calls++;
 }
 
 static void iomplx_active_list_populate(iomplx_active_list *active_list, uqueue *q)
@@ -99,12 +99,17 @@ static void iomplx_active_list_populate(iomplx_active_list *active_list, uqueue 
 	int rmg;
 	iomplx_waiter waiter;
 
-	if(active_list->calls_count >= IOMPLX_ITEM_CALLS)
+	if(active_list->available_item_calls == 0)
 		return;
 
 	iomplx_waiter_init(&waiter);
-	timeout = active_list->calls_count == 0? -1 : 0;
-	waiter.max_events = EVENTS - active_list->calls_count;
+
+	if(DLIST_ISEMPTY(active_list))
+		timeout = -1;
+	else
+		timeout = 0;
+
+	waiter.max_events = active_list->available_item_calls;
 	do {
 		rmg = uqueue_event_get(q, &waiter, timeout);
 		if(rmg != -1 && (waiter.type == IOMPLX_CLOSE_EVENT || iomplx_active_set(waiter.item)))
@@ -143,6 +148,7 @@ static void iomplx_thread_0(iomplx_instance *mplx)
 	unsigned long start_time = time(NULL);
 
 	iomplx_waiter_init(&waiter);
+	
 	do {
 		if(uqueue_event_get(&mplx->accept_uqueue, &waiter, mplx->monitor.timeout_granularity) != -1) {
 
@@ -175,7 +181,7 @@ static void iomplx_thread_n(iomplx_instance *mplx)
 	if(mplx->thread_init)
 		mplx->thread_init();
 
-	iomplx_active_list_init(&active_list, IOMPLX_ITEM_CALLS);
+	iomplx_active_list_init(&active_list, mplx->active_list_size[THREAD_N]);
 
 	do {
 		iomplx_active_list_populate(&active_list, &mplx->n_uqueue);
@@ -240,6 +246,8 @@ void iomplx_init(iomplx_instance *mplx, alloc_func alloc, free_func free, init_f
 	mplx->item_free = free;
 	mplx->thread_init = init;
 	mplx->threads = threads;
+	mplx->active_list_size[THREAD_0] = 10;
+	mplx->active_list_size[THREAD_N] = IOMPLX_MAX_ACTIVE_ITEMS/threads + IOMPLX_MAX_ACTIVE_ITEMS%threads != 0? 1 : 0;
 	iomplx_monitor_init(&mplx->monitor, timeout_granularity);
 	uqueue_init(&mplx->accept_uqueue);
 	uqueue_init(&mplx->n_uqueue);

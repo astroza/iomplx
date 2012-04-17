@@ -42,6 +42,7 @@ static inline int __copy_dlist_node(dlist_node *dst, dlist_node *src)
 #define DLIST_APPEND(list, node)	dlist_append((dlist *)(list), (dlist_node *)(node))
 #define DLIST_DEL(list, node)		dlist_del((dlist *)(list), (dlist_node *)(node))
 #define DLIST_TAIL(list)		((void *)((dlist *)list)->tail)
+#define DLIST_ISEMPTY(list)		(((dlist *)list)->head == NULL)
 #define DLIST_NODE_INIT(a)
 #define DLIST(name)			dlist name##_list
 #define DLIST_NODE(name)		dlist_node name##_node
