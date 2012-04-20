@@ -19,12 +19,14 @@
 
 #include <pthread.h>
 #include <sys/types.h>
+#include <sys/resource.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <string.h>
 #include <iomplx.h>
 #include <time.h>
 #include <unistd.h>
+#include <assert.h>
 
 static inline void iomplx_monitor_add(iomplx_monitor *mon, iomplx_item *item)
 {
@@ -51,6 +53,24 @@ static void iomplx_waiter_init(iomplx_waiter *waiter)
 static int iomplx_dummy_call1(iomplx_item *item)
 {
 	return 0;
+}
+
+static unsigned int iomplx_calc_thread_n_active_items(unsigned int threads, unsigned int thread_n_active_items) 
+{
+        struct rlimit rlmt;
+
+        if (getrlimit(RLIMIT_NOFILE, &rlmt) == -1) {
+                return -1;
+        } else {
+
+            if (!thread_n_active_items) 
+                thread_n_active_items = IOMPLX_THREAD_N_ACTIVE_ITEMS;
+
+            if ( (thread_n_active_items * threads) > (unsigned int)rlmt.rlim_cur)
+                return -1;
+        }
+
+        return thread_n_active_items;
 }
 
 static const iomplx_callbacks iomplx_dummy_calls = {
@@ -250,14 +270,23 @@ iomplx_item *iomplx_item_add(iomplx_instance *mplx, iomplx_item *item, int liste
 	return item_copy;
 }
 
-void iomplx_init(iomplx_instance *mplx, alloc_func alloc, free_func free, init_func init, unsigned int threads, unsigned int timeout_granularity)
+void iomplx_init(iomplx_instance *mplx, alloc_func alloc, free_func free, init_func init, unsigned int threads, unsigned int timeout_granularity, unsigned int thread_zero_active_items, unsigned int thread_n_active_items)
 {
-	mplx->item_alloc = alloc;
-	mplx->item_free = free;
-	mplx->thread_init = init;
-	mplx->threads = threads;
-	mplx->active_list_size[THREAD_0] = 10;
-	mplx->active_list_size[THREAD_N] = IOMPLX_MAX_ACTIVE_ITEMS/threads + (IOMPLX_MAX_ACTIVE_ITEMS%threads != 0? 1 : 0);
+        mplx->item_alloc = alloc;
+        mplx->item_free = free;
+        mplx->thread_init = init;
+        mplx->threads = threads;
+
+        if (!thread_zero_active_items) 
+	    thread_zero_active_items = IOMPLX_THREAD_ZERO_ACTIVE_ITEMS;
+
+        thread_n_active_items = iomplx_calc_thread_n_active_items(threads, thread_n_active_items);
+
+        assert(thread_n_active_items != -1);
+
+        mplx->active_list_size[THREAD_0] = thread_zero_active_items;
+	mplx->active_list_size[THREAD_N] = thread_n_active_items;
+
 	iomplx_monitor_init(&mplx->monitor, timeout_granularity);
 	uqueue_init(&mplx->accept_uqueue);
 	uqueue_init(&mplx->n_uqueue);

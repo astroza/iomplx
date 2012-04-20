@@ -71,7 +71,7 @@ int main()
 {
 	iomplx_instance m;
 	
-	iomplx_init(&m, malloc, free, NULL, 4, 4);
+	iomplx_init(&m, malloc, free, NULL, 4, 4, 0, 0);
 	iomplx_inet_listen(&m, "0.0.0.0", 2222, demo_accept, NULL);
 	iomplx_launch(&m);
 
