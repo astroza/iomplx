@@ -272,24 +272,24 @@ iomplx_item *iomplx_item_add(iomplx_instance *mplx, iomplx_item *item, int liste
 
 void iomplx_init(iomplx_instance *mplx, alloc_func alloc, free_func free, init_func init, unsigned int threads, unsigned int timeout_granularity, unsigned int thread_zero_active_items, unsigned int thread_n_active_items)
 {
-	mplx->item_alloc = alloc;
-	mplx->item_free = free;
-	mplx->thread_init = init;
-	mplx->threads = threads;
+    mplx->item_alloc = alloc;
+    mplx->item_free = free;
+    mplx->thread_init = init;
+    mplx->threads = threads;
 
-	if(!thread_zero_active_items)
-		thread_zero_active_items = IOMPLX_THREAD_ZERO_ACTIVE_ITEMS;
+    if(!thread_zero_active_items)
+	    thread_zero_active_items = IOMPLX_THREAD_ZERO_ACTIVE_ITEMS;
 
-	thread_n_active_items = iomplx_calc_thread_n_active_items(threads, thread_n_active_items);
+    thread_n_active_items = iomplx_calc_thread_n_active_items(threads, thread_n_active_items);
 
-	assert(thread_n_active_items != -1);
+    assert(thread_n_active_items != -1);
 
-	mplx->active_list_size[THREAD_0] = thread_zero_active_items;
-	mplx->active_list_size[THREAD_N] = thread_n_active_items;
+    mplx->active_list_size[THREAD_0] = thread_zero_active_items;
+    mplx->active_list_size[THREAD_N] = thread_n_active_items;
 
-	iomplx_monitor_init(&mplx->monitor, timeout_granularity);
-	uqueue_init(&mplx->accept_uqueue);
-	uqueue_init(&mplx->n_uqueue);
+    iomplx_monitor_init(&mplx->monitor, timeout_granularity);
+    uqueue_init(&mplx->accept_uqueue);
+    uqueue_init(&mplx->n_uqueue);
 }
 
 static void iomplx_start_threads(iomplx_instance *mplx)
