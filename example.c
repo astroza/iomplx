@@ -45,7 +45,7 @@ int demo_send(iomplx_item *item)
 
 int demo_timeout(iomplx_item *item)
 {
-	puts("TIMEOUT");
+	printf("TIMEOUT item->fd=%d\n", item->fd);
 	return -1;
 }
 

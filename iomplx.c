@@ -248,18 +248,19 @@ iomplx_item *iomplx_item_add(iomplx_instance *mplx, iomplx_item *item, int liste
 	item_copy->new_filter = item->new_filter;
 	memcpy(&item_copy->cb, &item->cb, sizeof(iomplx_callbacks));
 	item_copy->fd = item->fd;
-	item_copy->timeout = item->timeout;
 	item_copy->oneshot = item->oneshot;
 	item_copy->data = item->data;
 	item_copy->active = 0;
+
+	item_copy->timeout = item->timeout;
+	item_copy->timeouted = 0;
+	item_copy->elapsed_time = 0;
+	item_copy->new_timeout = -2;
 
 	if(listening)
 		uqueue_watch(&mplx->accept_uqueue, item_copy);
 	else
 		uqueue_watch(&mplx->n_uqueue, item_copy);
-
-	item_copy->elapsed_time = 0;
-	item_copy->new_timeout = -1;
 
 	return item_copy;
 }
