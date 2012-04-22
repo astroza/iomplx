@@ -22,7 +22,8 @@
 #include <mempool.h>
 #include <sys/socket.h>
 
-#define IOMPLX_MAX_ACTIVE_ITEMS 200
+#define IOMPLX_THREAD_ZERO_ACTIVE_ITEMS 10
+#define IOMPLX_THREAD_N_ACTIVE_ITEMS 200
 
 #define IOMPLX_READ_EVENT	1
 #define IOMPLX_WRITE_EVENT	2
@@ -133,7 +134,7 @@ void iomplx_callbacks_init(iomplx_item *);
 
 iomplx_item *iomplx_item_add(iomplx_instance *, iomplx_item *, int);
 
-void iomplx_init(iomplx_instance *, alloc_func, free_func, init_func, unsigned int, unsigned int);
+void iomplx_init(iomplx_instance *, alloc_func, free_func, init_func, unsigned int, unsigned int, unsigned int, unsigned int);
 void iomplx_launch(iomplx_instance *);
 
 static inline void iomplx_item_filter_set(iomplx_item *item, int filter)
