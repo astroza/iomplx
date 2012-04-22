@@ -29,8 +29,6 @@
 #define IOMPLX_TIMEOUT_EVENT	3
 #define IOMPLX_CLOSE_EVENT	4
 
-#define IOMPLX_ITEM_CALLS	EVENTS
-
 #define IOMPLX_ITEM_WOULDBLOCK	-2
 #define IOMPLX_ITEM_CLOSE	-1
 
@@ -58,13 +56,18 @@ typedef union {
 struct _iomplx_item {
 	DLIST_NODE(item);
 	int fd;
+	unsigned char active;
+
 	int filter;
 	int new_filter;
 	unsigned char oneshot;
-	iomplx_callbacks cb;
+
 	int timeout;
 	int elapsed_time;
-	int active;
+	unsigned char elapsed_time_reset;
+	unsigned char timeouted;
+
+	iomplx_callbacks cb;
 	void *data;
 	union {
 		struct {
@@ -138,19 +141,37 @@ static inline void iomplx_item_filter_set(iomplx_item *item, int filter)
         item->new_filter = filter;
 }
 
-static inline int iomplx_timeout_tryset(iomplx_item *item)
-{
-	return __sync_bool_compare_and_swap(&item->active, 0, -1);
-}
-
+/* iomplx_timeout_tryset is called from thread_0 and iomplx_active_set is called from thread_n.
+ * Only one of them can win "active" flag but not both. "timeouted" is for trying to inhibit thread_n
+ * when timeout is reached.
+ */
 static inline int iomplx_active_set(iomplx_item *item)
 {
-	return __sync_bool_compare_and_swap(&item->active, 0, 1);
+	if(!item->timeouted)
+		return __sync_bool_compare_and_swap(&item->active, 0, 1);
+	return 0;
 }
 
 static inline int iomplx_active_unset(iomplx_item *item)
 {
 	return __sync_bool_compare_and_swap(&item->active, 1, 0);
+}
+
+static inline int iomplx_timeout_tryset(iomplx_item *item)
+{
+	item->timeouted = 1;
+	return __sync_bool_compare_and_swap(&item->active, 0, 1);
+}
+
+static inline void iomplx_timeout_unset(iomplx_item *item)
+{
+	item->timeouted = 0;
+	iomplx_active_unset(item);
+}
+
+static inline void iomplx_timeout_reset(iomplx_item *item)
+{
+	item->elapsed_time_reset = 1;
 }
 
 #endif

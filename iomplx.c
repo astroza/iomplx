@@ -131,10 +131,20 @@ static void iomplx_do_maintenance(iomplx_instance *mplx, unsigned long *start_ti
 				continue;
 			}
 			/* Timeout check */
-			item->elapsed_time++;
-			if(item->elapsed_time >= item->timeout && item->cb.ev_timeout(item) == -1) {
-				if(iomplx_timeout_tryset(item))
-					shutdown(item->fd, SHUT_RDWR);
+			if(item->timeout > -1)
+				item->elapsed_time++;
+
+			if(!item->timeouted && item->elapsed_time_reset) {
+				item->elapsed_time = 0;
+				item->elapsed_time_reset = 0;
+			}
+
+			if(item->elapsed_time >= item->timeout) {
+				if(item->cb.ev_timeout(item) == -1) {
+					if(iomplx_timeout_tryset(item))
+						shutdown(item->fd, SHUT_RDWR);
+				} else
+					item->elapsed_time = 0;
 			}
 		}
 		*start_time = cur_time;
@@ -159,6 +169,7 @@ static void iomplx_thread_0(iomplx_instance *mplx)
 			local_item.new_filter = IOMPLX_READ;
 			local_item.sa_size = item->sa_size;
 			local_item.oneshot = 1;
+			local_item.timeout = -1;
 			local_item.fd = accept_and_set(item->fd, &local_item.sa, &local_item.sa_size);
 			if(local_item.fd != -1) {
 				if(item->cb.ev_accept(&local_item) < 0 || !(new_item = iomplx_item_add(mplx, &local_item, 0)))
@@ -237,8 +248,8 @@ iomplx_item *iomplx_item_add(iomplx_instance *mplx, iomplx_item *item, int liste
 	item_copy->fd = item->fd;
 	item_copy->timeout = item->timeout;
 	item_copy->oneshot = item->oneshot;
-	item_copy->active = 0;
 	item_copy->data = item->data;
+	item_copy->active = 0;
 
 	if(listening)
 		uqueue_watch(&mplx->accept_uqueue, item_copy);
@@ -246,6 +257,7 @@ iomplx_item *iomplx_item_add(iomplx_instance *mplx, iomplx_item *item, int liste
 		uqueue_watch(&mplx->n_uqueue, item_copy);
 
 	item_copy->elapsed_time = 0;
+	item_copy->elapsed_time_reset = 0;
 
 	return item_copy;
 }

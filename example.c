@@ -22,6 +22,7 @@ int demo_receive(iomplx_item *item)
 	if(eb->len <= 0)
 		return IOMPLX_ITEM_WOULDBLOCK;
 
+	iomplx_timeout_reset(item);
 	iomplx_item_filter_set(item, IOMPLX_WRITE);
 
 	return 0;
