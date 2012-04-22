@@ -63,8 +63,8 @@ struct _iomplx_item {
 	unsigned char oneshot;
 
 	int timeout;
+	int new_timeout;
 	int elapsed_time;
-	unsigned char elapsed_time_reset;
 	unsigned char timeouted;
 
 	iomplx_callbacks cb;
@@ -141,37 +141,30 @@ static inline void iomplx_item_filter_set(iomplx_item *item, int filter)
         item->new_filter = filter;
 }
 
-/* iomplx_timeout_tryset is called from thread_0 and iomplx_active_set is called from thread_n.
- * Only one of them can win "active" flag but not both. "timeouted" is for trying to inhibit thread_n
- * when timeout is reached.
+/* thread_0 and thread_n try to set item's "active" flag, but only one will achieve it.
+ * "timeouted" is used for trying to inhibit thread_n when timeout is reached and 
+ * it requests to close the connection.
  */
-static inline int iomplx_active_set(iomplx_item *item)
+static inline int iomplx_active_tryset(iomplx_item *item, int no_timeouted_check)
 {
-	if(!item->timeouted)
+	if(no_timeouted_check || !item->timeouted)
 		return __sync_bool_compare_and_swap(&item->active, 0, 1);
 	return 0;
 }
 
-static inline int iomplx_active_unset(iomplx_item *item)
+static inline void iomplx_active_unset(iomplx_item *item)
 {
-	return __sync_bool_compare_and_swap(&item->active, 1, 0);
+	__sync_bool_compare_and_swap(&item->active, 1, 0);
 }
 
-static inline int iomplx_timeout_tryset(iomplx_item *item)
+static inline void iomplx_timeout_set(iomplx_item *item, int timeout)
 {
-	item->timeouted = 1;
-	return __sync_bool_compare_and_swap(&item->active, 0, 1);
-}
-
-static inline void iomplx_timeout_unset(iomplx_item *item)
-{
-	item->timeouted = 0;
-	iomplx_active_unset(item);
+	item->new_timeout = timeout;
 }
 
 static inline void iomplx_timeout_reset(iomplx_item *item)
 {
-	item->elapsed_time_reset = 1;
+	iomplx_timeout_set(item, item->timeout);
 }
 
 #endif

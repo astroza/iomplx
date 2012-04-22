@@ -112,7 +112,7 @@ static void iomplx_active_list_populate(iomplx_active_list *active_list, uqueue 
 	waiter.max_events = active_list->available_item_calls;
 	do {
 		rmg = uqueue_event_get(q, &waiter, timeout);
-		if(rmg != -1 && (waiter.type == IOMPLX_CLOSE_EVENT || iomplx_active_set(waiter.item)))
+		if(rmg != -1 && (waiter.type == IOMPLX_CLOSE_EVENT || iomplx_active_tryset(waiter.item, 0)))
 			iomplx_active_list_call_add(active_list, waiter.item, waiter.type);
 	} while(rmg > 0);
 }
@@ -134,14 +134,16 @@ static void iomplx_do_maintenance(iomplx_instance *mplx, unsigned long *start_ti
 			if(item->timeout > -1)
 				item->elapsed_time++;
 
-			if(!item->timeouted && item->elapsed_time_reset) {
+			if(!item->timeouted && item->new_timeout != -2) {
 				item->elapsed_time = 0;
-				item->elapsed_time_reset = 0;
+				item->timeout = item->new_timeout;
+				item->new_timeout = -2;
 			}
 
 			if(item->elapsed_time >= item->timeout) {
 				if(item->cb.ev_timeout(item) == -1) {
-					if(iomplx_timeout_tryset(item))
+					item->timeouted = 1;
+					if(iomplx_active_tryset(item, 1))
 						shutdown(item->fd, SHUT_RDWR);
 				} else
 					item->elapsed_time = 0;
@@ -257,7 +259,7 @@ iomplx_item *iomplx_item_add(iomplx_instance *mplx, iomplx_item *item, int liste
 		uqueue_watch(&mplx->n_uqueue, item_copy);
 
 	item_copy->elapsed_time = 0;
-	item_copy->elapsed_time_reset = 0;
+	item_copy->new_timeout = -1;
 
 	return item_copy;
 }
