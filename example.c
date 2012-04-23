@@ -64,7 +64,7 @@ int demo_accept(iomplx_item *item)
 	item->cb.ev_close = demo_disconnect;
 	item->timeout = 3;
 	item->data = malloc(sizeof(struct echo_buffer));
-	puts("accept");
+	printf("ACCEPT item->fd=%d\n", item->fd);
 	return 0;
 }
 
@@ -72,8 +72,8 @@ int main()
 {
 	iomplx_instance m;
 	
-	iomplx_init(&m, malloc, free, NULL, 4, 4);
-	iomplx_inet_listen(&m, "0.0.0.0", 2222, demo_accept, NULL);
+	iomplx_init(&m, NULL, 4, 4);
+	iomplx_inet_listen(&m, "0.0.0.0", 2222, demo_accept, malloc, free, NULL);
 	iomplx_launch(&m);
 
 	return 0;

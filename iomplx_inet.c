@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <iomplx.h>
@@ -5,48 +6,55 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 
-int iomplx_inet_listen(iomplx_instance *mplx, const char *addr, unsigned short port, ev_call1 ev_accept, void *data)
+int iomplx_inet_listen(iomplx_instance *mplx, const char *addr, unsigned short port, ev_call1 ev_accept, alloc_func item_alloc, free_func item_free, void *data)
 {
-	iomplx_item local_item, *item;
+	iomplx_item *item;
 	struct sockaddr_in *sa;
-	int ret, set = 1;
-	int status = 1;
+	int fd, ret, set = 1, status = 1;
 
-	local_item.fd = socket(AF_INET, SOCK_STREAM, 0);
-        if (local_item.fd == -1 )
-                return -1;
+	item = malloc(sizeof(iomplx_item));
+	if(!item)
+		return -1;
 
-	sa = (struct sockaddr_in *)&local_item.sa;
+	item->fd = socket(AF_INET, SOCK_STREAM, 0);
+	if(fd == -1) {
+		free(item);
+		return -1;
+	}
+
+	sa = (struct sockaddr_in *)&item->sa;
 	sa->sin_family = AF_INET;
 	sa->sin_port = htons(port);
 	sa->sin_addr.s_addr = inet_addr(addr);
-	local_item.sa_size = sizeof(struct sockaddr_in);
+	item->sa_size = sizeof(struct sockaddr_in);
 
-	if(setsockopt(local_item.fd, SOL_SOCKET, SO_REUSEADDR, &status, sizeof(status)) == -1)
+	if(setsockopt(item->fd, SOL_SOCKET, SO_REUSEADDR, &status, sizeof(status)) == -1)
 		goto error;
 
-	ret = bind(local_item.fd, &local_item.sa, local_item.sa_size);
+	ret = bind(item->fd, &item->sa, item->sa_size);
 	if(ret == -1)
 		goto error;
 
-	if(listen(local_item.fd, IOMPLX_CONF_BACKLOG) == -1)
+	if(listen(item->fd, IOMPLX_CONF_BACKLOG) == -1)
 		goto error;
 
-	if(ioctl(local_item.fd, FIONBIO, &set) == -1)
+	if(ioctl(item->fd, FIONBIO, &set) == -1)
 		goto error;
 
-	local_item.data = data;
-	local_item.oneshot = 0;
-	local_item.new_filter = IOMPLX_READ;
-	iomplx_callbacks_init(&local_item);
-	local_item.cb.ev_accept = ev_accept;
+	item->item_alloc = item_alloc;
+	item->item_free = item_free;
+	item->data = data;
+	item->oneshot = 0;
+	item->new_filter = IOMPLX_READ;
+	item->cb.ev_accept = ev_accept;
 
-	item = iomplx_item_add(mplx, &local_item, 1);
-	if(!item)
-		goto error;
+	DLIST_INIT(&item->guard);
+	DLIST_APPEND(&mplx->guards, item);
 
+	iomplx_item_add(mplx, item, 1);
 	return 0;
 error:
-	close(local_item.fd);
+	close(item->fd);
+	free(item);
 	return -1;
 }

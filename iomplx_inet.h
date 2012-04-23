@@ -3,6 +3,6 @@
 
 #define IOMPLX_CONF_BACKLOG     10
 
-int iomplx_inet_listen(iomplx_instance *, const char *, unsigned short, ev_call1, void *);
+int iomplx_inet_listen(iomplx_instance *, const char *, unsigned short, ev_call1, alloc_func, free_func, void *);
 
 #endif

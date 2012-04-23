@@ -24,10 +24,12 @@
 
 #define IOMPLX_MAX_ACTIVE_ITEMS 200
 
-#define IOMPLX_READ_EVENT	1
-#define IOMPLX_WRITE_EVENT	2
-#define IOMPLX_TIMEOUT_EVENT	3
-#define IOMPLX_CLOSE_EVENT	4
+#define IOMPLX_READ_EVENT	0
+#define IOMPLX_WRITE_EVENT	1
+#define IOMPLX_TIMEOUT_EVENT	2
+#define IOMPLX_CLOSE_EVENT	3
+#define IOMPLX_ACCEPT_EVENT	4
+#define IOMPLX_CONNECT_EVENT	4
 
 #define IOMPLX_ITEM_WOULDBLOCK	-2
 #define IOMPLX_ITEM_CLOSE	-1
@@ -41,14 +43,16 @@ typedef void (*init_func)();
 
 typedef union {
 	struct {
+		struct {
+			ev_call1 ev_read;
+			ev_call1 ev_write;
+			ev_call1 ev_timeout;
+			ev_call1 ev_close;
+		};
 		union {
 			ev_call1 ev_connect;
 			ev_call1 ev_accept;
 		};
-		ev_call1 ev_read;
-		ev_call1 ev_write;
-		ev_call1 ev_timeout;
-		ev_call1 ev_close;
 	};
 	ev_call1 calls_arr[5];
 } iomplx_callbacks;
@@ -67,7 +71,14 @@ struct _iomplx_item {
 	int elapsed_time;
 	unsigned char timeouted;
 
-	iomplx_callbacks cb;
+	union {
+		iomplx_callbacks cb;
+		struct {
+			alloc_func item_alloc;
+			free_func item_free;
+			dlist guard;
+		};
+	};
 	void *data;
 	union {
 		struct {
@@ -76,11 +87,6 @@ struct _iomplx_item {
 		};
 	};
 };
-
-typedef struct {
-	DLIST(items);
-	int timeout_granularity;
-} iomplx_monitor;
 
 #include "glue.h"
 
@@ -99,10 +105,9 @@ typedef struct {
 #define THREAD_0 0
 #define THREAD_N 1
 	unsigned int active_list_size[2];
-	iomplx_monitor monitor;
-	alloc_func item_alloc;
-	free_func item_free;
 	init_func thread_init;
+	dlist guards;
+	int timeout_granularity;
 } iomplx_instance;
 
 typedef struct {
@@ -131,9 +136,9 @@ void uqueue_filter_set(uqueue *, iomplx_item *);
 int accept_and_set(int, struct sockaddr *, unsigned int *);
 void iomplx_callbacks_init(iomplx_item *);
 
-iomplx_item *iomplx_item_add(iomplx_instance *, iomplx_item *, int);
+void iomplx_item_add(iomplx_instance *, iomplx_item *, int);
 
-void iomplx_init(iomplx_instance *, alloc_func, free_func, init_func, unsigned int, unsigned int);
+void iomplx_init(iomplx_instance *, init_func, unsigned int, unsigned int);
 void iomplx_launch(iomplx_instance *);
 
 static inline void iomplx_item_filter_set(iomplx_item *item, int filter)
