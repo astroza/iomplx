@@ -55,22 +55,26 @@ static int iomplx_dummy_call1(iomplx_item *item)
 	return 0;
 }
 
-static unsigned int iomplx_calc_thread_n_active_items(unsigned int threads, unsigned int thread_n_active_items)
+static inline void iomplx_active_list_size_fix(unsigned int *active_list_size, unsigned int threads)
 {
         struct rlimit rlmt;
+	unsigned int active_items = 0;
 
-        if (getrlimit(RLIMIT_NOFILE, &rlmt) == -1) {
-                return -1;
-        } else {
+	assert(threads);
+	assert(getrlimit(RLIMIT_NOFILE, &rlmt) != -1 || rlmt.rlim_cur != 0);
 
-            if (!thread_n_active_items)
-                thread_n_active_items = IOMPLX_THREAD_N_ACTIVE_ITEMS;
+	if ( !active_list_size[THREAD_N] )
+		active_list_size[THREAD_N] = IOMPLX_THREAD_N_ACTIVE_ITEMS;
 
-            if ( (thread_n_active_items * threads) > (unsigned int)rlmt.rlim_cur)
-                return -1;
-        }
+	if ( !active_list_size[THREAD_0] )
+		active_list_size[THREAD_0] = IOMPLX_THREAD_0_ACTIVE_ITEMS;
 
-        return thread_n_active_items;
+	active_items = active_list_size[THREAD_N] * threads + active_list_size[THREAD_0];
+
+	if ( active_items > rlmt.rlim_cur ) {
+		assert(active_list_size[THREAD_0] < rlmt.rlim_cur);
+		active_list_size[THREAD_N] = (rlmt.rlim_cur - active_list_size[THREAD_0]) / threads;
+	}
 }
 
 static const iomplx_callbacks iomplx_dummy_calls = {
@@ -272,24 +276,19 @@ iomplx_item *iomplx_item_add(iomplx_instance *mplx, iomplx_item *item, int liste
 
 void iomplx_init(iomplx_instance *mplx, alloc_func alloc, free_func free, init_func init, unsigned int threads, unsigned int timeout_granularity, unsigned int thread_zero_active_items, unsigned int thread_n_active_items)
 {
-    mplx->item_alloc = alloc;
-    mplx->item_free = free;
-    mplx->thread_init = init;
-    mplx->threads = threads;
+    	mplx->item_alloc = alloc;
+    	mplx->item_free = free;
+    	mplx->thread_init = init;
+    	mplx->threads = threads;
 
-    if(!thread_zero_active_items)
-	    thread_zero_active_items = IOMPLX_THREAD_ZERO_ACTIVE_ITEMS;
+	mplx->active_list_size[THREAD_0] = thread_zero_active_items;
+	mplx->active_list_size[THREAD_N] = thread_n_active_items;
 
-    thread_n_active_items = iomplx_calc_thread_n_active_items(threads, thread_n_active_items);
+	iomplx_active_list_size_fix(mplx->active_list_size, threads);
+	iomplx_monitor_init(&mplx->monitor, timeout_granularity);
 
-    assert(thread_n_active_items != -1);
-
-    mplx->active_list_size[THREAD_0] = thread_zero_active_items;
-    mplx->active_list_size[THREAD_N] = thread_n_active_items;
-
-    iomplx_monitor_init(&mplx->monitor, timeout_granularity);
-    uqueue_init(&mplx->accept_uqueue);
-    uqueue_init(&mplx->n_uqueue);
+	uqueue_init(&mplx->accept_uqueue);
+    	uqueue_init(&mplx->n_uqueue);
 }
 
 static void iomplx_start_threads(iomplx_instance *mplx)

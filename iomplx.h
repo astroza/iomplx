@@ -22,7 +22,7 @@
 #include <mempool.h>
 #include <sys/socket.h>
 
-#define IOMPLX_THREAD_ZERO_ACTIVE_ITEMS 10
+#define IOMPLX_THREAD_0_ACTIVE_ITEMS 10
 #define IOMPLX_THREAD_N_ACTIVE_ITEMS 200
 
 #define IOMPLX_READ_EVENT	1
