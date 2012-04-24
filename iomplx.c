@@ -57,7 +57,7 @@ static int iomplx_dummy_call1(iomplx_item *item)
 
 static inline void iomplx_active_list_size_fix(unsigned int *active_list_size, unsigned int threads)
 {
-        struct rlimit rlmt;
+	struct rlimit rlmt;
 	unsigned int active_items = 0;
 
 	assert(threads);
