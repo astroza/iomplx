@@ -18,11 +18,17 @@ ifneq ($(findstring /usr/include/sys/event.h, $(wildcard /usr/include/sys/*.h)),
 	UQUEUE=KQUEUE
 endif
 
+ifeq ($(CPU_AFFINITY), 1)
+	CFLAGS += -D_GNU_SOURCE -DCPU_AFFINITY=1
+endif
+
+
 UQUEUE_SRC=backend/$(shell echo $(UQUEUE) | tr A-Z a-z).c
 SRC+=$(UQUEUE_SRC)
 
 OBJ=$(SRC:.c=.o)
-all: prepare lib
+
+all: prepare lib example
 	@echo "Done"
 
 prepare:

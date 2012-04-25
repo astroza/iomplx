@@ -22,6 +22,18 @@
 #include <mempool.h>
 #include <sys/socket.h>
 
+#if !defined(USE_CPU_AFFINITY)
+#define USE_CPU_AFFINITY ( CPU_AFFINITY && __linux__ )
+#endif
+
+#if USE_CPU_AFFINITY
+#if !defined(_GNU_SOURCE)
+#define _GNU_SOURCE 1
+#endif
+#include <sched.h>
+#endif
+
+
 #define IOMPLX_THREAD_0_ACTIVE_ITEMS 10
 #define IOMPLX_THREAD_N_ACTIVE_ITEMS 200
 
