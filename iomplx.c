@@ -299,7 +299,7 @@ static void iomplx_start_threads(iomplx_instance *mplx)
 
 #if USE_CPU_AFFINITY
 	int procs = 0;
-        cpu_set_t cpu_set;
+	cpu_set_t cpu_set;
 
 	procs = (unsigned int)sysconf( _SC_NPROCESSORS_ONLN );
 	assert(procs != -1);
@@ -317,7 +317,7 @@ static void iomplx_start_threads(iomplx_instance *mplx)
 		pthread_create(&unused, &attr, (void *(*)(void *))iomplx_thread_n, (void *)mplx);
 
 #if USE_CPU_AFFINITY
-                CPU_SET(i, &cpu_set);
+		CPU_SET(i, &cpu_set);
 		pthread_setaffinity_np(unused, sizeof(cpu_set_t), &cpu_set);
 #endif
 
