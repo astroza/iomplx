@@ -22,7 +22,8 @@
 #include <mempool.h>
 #include <sys/socket.h>
 
-#define IOMPLX_MAX_ACTIVE_ITEMS 200
+#define IOMPLX_MAX_ACTIVE_ITEMS 	200
+#define IOMPLX_MAINTENANCE_PERIOD 	4	/* Seconds */
 
 #define IOMPLX_READ_EVENT	0
 #define IOMPLX_WRITE_EVENT	1
@@ -60,16 +61,10 @@ typedef union {
 struct _iomplx_item {
 	DLIST_NODE(item);
 	int fd;
-	unsigned char active;
 
 	int filter;
 	int new_filter;
 	unsigned char oneshot;
-
-	int timeout;
-	int new_timeout;
-	int elapsed_time;
-	unsigned char timeouted;
 
 	union {
 		iomplx_callbacks cb;
@@ -107,7 +102,6 @@ typedef struct {
 	unsigned int active_list_size[2];
 	init_func thread_init;
 	dlist guards;
-	int timeout_granularity;
 } iomplx_instance;
 
 typedef struct {
@@ -138,38 +132,12 @@ void iomplx_callbacks_init(iomplx_item *);
 
 void iomplx_item_add(iomplx_instance *, iomplx_item *, int);
 
-void iomplx_init(iomplx_instance *, init_func, unsigned int, unsigned int);
+void iomplx_init(iomplx_instance *, init_func, unsigned int);
 void iomplx_launch(iomplx_instance *);
 
 static inline void iomplx_item_filter_set(iomplx_item *item, int filter)
 {
         item->new_filter = filter;
-}
-
-/* thread_0 and thread_n try to set item's "active" flag, but only one will achieve it.
- * "timeouted" is used for trying to inhibit thread_n when timeout is reached and 
- * it requests to close the connection.
- */
-static inline int iomplx_active_tryset(iomplx_item *item, int no_timeouted_check)
-{
-	if(no_timeouted_check || !item->timeouted)
-		return __sync_bool_compare_and_swap(&item->active, 0, 1);
-	return 0;
-}
-
-static inline void iomplx_active_unset(iomplx_item *item)
-{
-	__sync_bool_compare_and_swap(&item->active, 1, 0);
-}
-
-static inline void iomplx_timeout_set(iomplx_item *item, int timeout)
-{
-	item->new_timeout = timeout;
-}
-
-static inline void iomplx_timeout_reset(iomplx_item *item)
-{
-	iomplx_timeout_set(item, item->timeout);
 }
 
 #endif

@@ -96,7 +96,7 @@ static void iomplx_active_list_populate(iomplx_active_list *active_list, uqueue 
 	waiter.max_events = active_list->available_item_calls;
 	do {
 		rmg = uqueue_event_get(q, &waiter, timeout);
-		if(rmg != -1 && (waiter.type == IOMPLX_CLOSE_EVENT || iomplx_active_tryset(waiter.item, 0)))
+		if(rmg != -1)
 			iomplx_active_list_call_add(active_list, waiter.item, waiter.type);
 	} while(rmg > 0);
 }
@@ -112,33 +112,15 @@ static inline void iomplx_guard_maintenance(dlist *items, free_func item_free)
 			item_free(item);
 			continue;
 		}
-		/* Timeout check */
-		if(item->timeout > -1)
-			item->elapsed_time++;
-
-		if(!item->timeouted && item->new_timeout != -2) {
-			item->elapsed_time = 0;
-			item->timeout = item->new_timeout;
-			item->new_timeout = -2;
-		}
-
-		if(item->elapsed_time >= item->timeout) {
-			if(item->cb.ev_timeout(item) == -1) {
-				item->timeouted = 1;
-				if(iomplx_active_tryset(item, 1))
-					shutdown(item->fd, SHUT_RDWR);
-			} else
-				item->elapsed_time = 0;
-		}
 	}
 }
 
-static void iomplx_do_maintenance(dlist *guards, unsigned long *start_time, int timeout_granularity)
+static void iomplx_do_maintenance(dlist *guards, unsigned long *start_time, int period)
 {
 	unsigned long cur_time = time(NULL);
 	iomplx_item *item;
 
-	if(cur_time - *start_time >= timeout_granularity) {
+	if(cur_time - *start_time >= period) {
 		DLIST_FOREACH(guards AS item)
 			iomplx_guard_maintenance(&item->guard, item->item_free);
 		*start_time = cur_time;
@@ -158,7 +140,7 @@ static void iomplx_thread_0(iomplx_instance *mplx)
 	iomplx_active_list_init(&active_list, mplx->active_list_size[THREAD_0]);
 
 	do {
-		iomplx_active_list_populate(&active_list, &mplx->accept_uqueue, mplx->timeout_granularity);
+		iomplx_active_list_populate(&active_list, &mplx->accept_uqueue, IOMPLX_MAINTENANCE_PERIOD);
 
 		DLIST_FOREACH(&active_list AS item_call) {
 			item = item_call->item;
@@ -166,7 +148,6 @@ static void iomplx_thread_0(iomplx_instance *mplx)
 			fd = accept_and_set(item->fd, &sa, &sa_size);
 			if(fd == -1) {
 				iomplx_active_list_call_del(&active_list, item_call);
-				iomplx_active_unset(item);
 				continue;
 			}
 
@@ -179,7 +160,6 @@ static void iomplx_thread_0(iomplx_instance *mplx)
 				new_item->sa = sa;
 				new_item->sa_size = sa_size;
 				new_item->oneshot = 1;
-				new_item->timeout = -1;
 				if(item->cb.ev_accept(new_item) < 0) {
 					item->item_free(new_item);
 					close(fd);
@@ -189,7 +169,7 @@ static void iomplx_thread_0(iomplx_instance *mplx)
 				}
 			}
 		}
-		iomplx_do_maintenance(&mplx->guards, &start_time, mplx->timeout_granularity);
+		iomplx_do_maintenance(&mplx->guards, &start_time, IOMPLX_MAINTENANCE_PERIOD);
 
 	} while(1);
 }
@@ -223,11 +203,9 @@ static void iomplx_thread_n(iomplx_instance *mplx)
 				close(item->fd);
 				item->fd = -1;
 				iomplx_active_list_call_del(&active_list, item_call);
-				iomplx_active_unset(item);
 			} else if(ret == IOMPLX_ITEM_WOULDBLOCK) {
 				uqueue_rewatch(&mplx->n_uqueue, item);
 				iomplx_active_list_call_del(&active_list, item_call);
-				iomplx_active_unset(item);
 			} else if(item->new_filter != IOMPLX_NONE) {
 				if(item->new_filter == IOMPLX_WRITE)
 					item_call->call_idx = IOMPLX_WRITE_EVENT;
@@ -245,10 +223,6 @@ static void iomplx_thread_n(iomplx_instance *mplx)
 void iomplx_item_add(iomplx_instance *mplx, iomplx_item *item, int listening)
 {
 	DLIST_NODE_INIT(item);
-	item->active = 0;
-	item->timeouted = 0;
-	item->elapsed_time = 0;
-	item->new_timeout = -2;
 
 	if(listening)
 		uqueue_watch(&mplx->accept_uqueue, item);
@@ -256,13 +230,12 @@ void iomplx_item_add(iomplx_instance *mplx, iomplx_item *item, int listening)
 		uqueue_watch(&mplx->n_uqueue, item);
 }
 
-void iomplx_init(iomplx_instance *mplx, init_func init, unsigned int threads, unsigned int timeout_granularity)
+void iomplx_init(iomplx_instance *mplx, init_func init, unsigned int threads)
 {
 	mplx->thread_init = init;
 	mplx->threads = threads;
 	mplx->active_list_size[THREAD_0] = 10;
 	mplx->active_list_size[THREAD_N] = IOMPLX_MAX_ACTIVE_ITEMS/threads + (IOMPLX_MAX_ACTIVE_ITEMS%threads != 0? 1 : 0);
-	mplx->timeout_granularity = timeout_granularity;
 	DLIST_INIT(&mplx->guards);
 	uqueue_init(&mplx->accept_uqueue);
 	uqueue_init(&mplx->n_uqueue);
