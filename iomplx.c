@@ -25,6 +25,7 @@
 #include <iomplx.h>
 #include <time.h>
 #include <unistd.h>
+#include <signal.h>
 
 static void iomplx_waiter_init(iomplx_waiter *waiter)
 {
@@ -221,6 +222,7 @@ static void iomplx_thread_n(iomplx_instance *mplx)
 	iomplx_item *item;
 	int ret;
 
+	signal(SIGPIPE, SIG_IGN);
 	if(mplx->thread_init)
 		mplx->thread_init();
 
