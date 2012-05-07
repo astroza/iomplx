@@ -101,44 +101,44 @@ static void iomplx_active_list_populate(iomplx_active_list *active_list, uqueue 
 	} while(rmg > 0);
 }
 
-static inline void iomplx_item_timeout_check(uqueue *n_uqueue, iomplx_item *item)
+static inline void iomplx_item_timeout_check(uqueue *n_uqueue, iomplx_item *item, unsigned long cur_time)
 {
+	int ret;
+
 	switch(item->timeout.stage) {
 		case 0:
 			if(item->timeout.time_limit > 0) {
-				item->timeout.elapsed_time += IOMPLX_MAINTENANCE_PERIOD;
-				if(item->timeout.elapsed_time >= item->timeout.time_limit) {
+				if(cur_time - item->timeout.start_time >= item->timeout.time_limit) {
 					item->timeout.high = 1;
 					item->timeout.stage = 1;
 					item->disabled = 1;
-					puts("DISABLE...");
-					uqueue_disable(n_uqueue, item);
-					puts("DISABLED.");
+					uqueue_unwatch(n_uqueue, item);
 				}
 			}
 			break;
 		case 1:
 			if(item->disabled == 0) {
 				item->disabled = 1;
-				puts("DISABLE...");
-				uqueue_disable(n_uqueue, item);
-				puts("DISABLED.");
+				uqueue_unwatch(n_uqueue, item);
 			} else {
-				if(item->cb.ev_timeout(item) == 0) {
+				ret = item->cb.ev_timeout(item);
+				if(ret == 0) {
 					item->timeout.high = 0;
-					item->timeout.elapsed_time = 0;
+					item->timeout.start_time = time(NULL);
 					item->timeout.stage = 0;
 					item->disabled = 0;
-				} else
-					shutdown(item->fd, SHUT_RDWR);
-
-				uqueue_enable(n_uqueue, item);
+					uqueue_watch(n_uqueue, item);
+				} else {
+					item->cb.ev_close(item);
+					close(item->fd);
+					item->fd = -1;
+				}
 			}
 			break;
 	}
 }
 
-static void iomplx_guard_maintenance(uqueue *n_uqueue, dlist *items, free_func item_free)
+static void iomplx_guard_maintenance(uqueue *n_uqueue, dlist *items, free_func item_free, unsigned long cur_time)
 {
 	iomplx_item *item;
 
@@ -149,7 +149,7 @@ static void iomplx_guard_maintenance(uqueue *n_uqueue, dlist *items, free_func i
 			item_free(item);
 			continue;
 		}
-		iomplx_item_timeout_check(n_uqueue, item);
+		iomplx_item_timeout_check(n_uqueue, item, cur_time);
 	}
 }
 
@@ -160,7 +160,7 @@ static void iomplx_do_maintenance(uqueue *n_uqueue, dlist *guards, unsigned long
 
 	if(cur_time - *start_time >= IOMPLX_MAINTENANCE_PERIOD) {
 		DLIST_FOREACH(guards AS item)
-			iomplx_guard_maintenance(n_uqueue, &item->guard, item->item_free);
+			iomplx_guard_maintenance(n_uqueue, &item->guard, item->item_free, cur_time);
 		*start_time = cur_time;
 	}
 }
@@ -194,7 +194,7 @@ static void iomplx_thread_0(iomplx_instance *mplx)
 			else {
 				iomplx_callbacks_init(new_item);
 				new_item->fd = fd;
-				new_item->new_filter = IOMPLX_READ;
+				new_item->filter = IOMPLX_READ;
 				new_item->sa = sa;
 				new_item->sa_size = sa_size;
 				new_item->oneshot = 1;
@@ -246,14 +246,13 @@ static void iomplx_thread_n(iomplx_instance *mplx)
 					item->disabled = 0;
 				}
 				iomplx_active_list_call_del(&active_list, item_call);
-			} else if(item->new_filter != IOMPLX_NONE) {
-				if(item->new_filter == IOMPLX_WRITE)
+			} else if(item->filter != item->applied_filter) {
+				if(item->filter == IOMPLX_WRITE)
 					item_call->call_idx = IOMPLX_WRITE_EVENT;
-				else if(item->new_filter == IOMPLX_READ)
+				else if(item->filter == IOMPLX_READ)
 					item_call->call_idx = IOMPLX_READ_EVENT;
 
-				item->filter = item->new_filter;
-				item->new_filter = IOMPLX_NONE;
+				item->applied_filter = item->filter;
 			}
 		}
 
@@ -264,9 +263,9 @@ void iomplx_item_add(iomplx_instance *mplx, iomplx_item *item, int listening)
 {
 	DLIST_NODE_INIT(item);
 	item->disabled = 0;
-	item->timeout.elapsed_time = 0;
 	item->timeout.stage = 0;
 	item->timeout.high = 0;
+	item->closed = 0;
 	if(listening)
 		uqueue_watch(&mplx->accept_uqueue, item);
 	else

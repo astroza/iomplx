@@ -63,9 +63,10 @@ struct _iomplx_item {
 	int fd;
 
 	int filter;
-	int new_filter;
+	int applied_filter;
 	unsigned char oneshot:1;
 	unsigned char disabled:1;
+	unsigned char closed:1;
 
 	union {
 		iomplx_callbacks cb;
@@ -78,9 +79,9 @@ struct _iomplx_item {
 
 	struct {
 		unsigned char high:1;
-		unsigned char stage:1;
+		unsigned char stage:2;
 		unsigned int time_limit;
-		unsigned int elapsed_time;
+		unsigned int start_time;
 	} timeout;
 
 	void *data;
@@ -135,7 +136,6 @@ int uqueue_event_get(uqueue *, iomplx_waiter *, int);
 void uqueue_watch(uqueue *, iomplx_item *);
 void uqueue_unwatch(uqueue *, iomplx_item *);
 void uqueue_enable(uqueue *q, iomplx_item *item);
-void uqueue_disable(uqueue *q, iomplx_item *item);
 void uqueue_filter_set(uqueue *, iomplx_item *);
 int accept_and_set(int, struct sockaddr *, unsigned int *);
 void iomplx_callbacks_init(iomplx_item *);
@@ -147,7 +147,13 @@ void iomplx_launch(iomplx_instance *);
 
 static inline void iomplx_item_filter_set(iomplx_item *item, int filter)
 {
-        item->new_filter = filter;
+        item->filter = filter;
+}
+
+static inline void iomplx_item_timeout_set(iomplx_item *item, unsigned long time_limit)
+{
+	item->timeout.start_time = time(NULL);
+	item->timeout.time_limit = time_limit;
 }
 
 #endif

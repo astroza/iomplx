@@ -83,10 +83,9 @@ void uqueue_watch(uqueue *q, iomplx_item *item)
 	if(item->oneshot)
 		ext_flags |= EV_ONESHOT;
 
-	EV_SET(&c, item->fd, item->new_filter, EV_ADD|EV_CLEAR|EV_ENABLE|EV_RECEIPT|ext_flags, 0, 0, item);
+	EV_SET(&c, item->fd, item->filter, EV_ADD|EV_CLEAR|EV_ENABLE|EV_RECEIPT|ext_flags, 0, 0, item);
 	kevent(q->kqueue_iface, &c, 1, NULL, 0, NULL);
-	item->filter = item->new_filter;
-	item->new_filter = IOMPLX_NONE;
+	item->applied_filter = item->filter;
 }
 
 void uqueue_unwatch(uqueue *q, iomplx_item *item)
@@ -99,15 +98,7 @@ void uqueue_unwatch(uqueue *q, iomplx_item *item)
 
 void uqueue_enable(uqueue *q, iomplx_item *item)
 {
-	if(item->new_filter == IOMPLX_NONE)
-		item->new_filter = item->filter;
-
 	uqueue_watch(q, item);
-}
-
-void uqueue_disable(uqueue *q, iomplx_item *item)
-{
-	uqueue_unwatch(q, item);
 }
 
 void uqueue_filter_set(uqueue *q, iomplx_item *item)

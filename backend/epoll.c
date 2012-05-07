@@ -79,12 +79,11 @@ void uqueue_watch(uqueue *q, iomplx_item *item)
 	struct epoll_event ev;
 
 	ev.data.ptr = item;
-	ev.events = EPOLLRDHUP|EPOLLET|item->new_filter;
+	ev.events = EPOLLRDHUP|EPOLLET|item->filter;
 	if(item->oneshot)
 		ev.events |= EPOLLONESHOT;
 	epoll_ctl(q->epoll_iface, EPOLL_CTL_ADD, item->fd, &ev);
-	item->filter = item->new_filter;
-	item->new_filter = IOMPLX_NONE;
+	item->applied_filter = item->filter;
 }
 
 void uqueue_unwatch(uqueue *q, iomplx_item *item)
@@ -92,11 +91,8 @@ void uqueue_unwatch(uqueue *q, iomplx_item *item)
 	epoll_ctl(q->epoll_iface, EPOLL_CTL_DEL, item->fd, NULL);
 }
 
-void uqueue_rewatch(uqueue *q, iomplx_item *item)
+void uqueue_enable(uqueue *q, iomplx_item *item)
 {
-	if(item->new_filter == IOMPLX_NONE)
-		item->new_filter = item->filter;
-
 	uqueue_filter_set(q, item);
 }
 
@@ -105,12 +101,11 @@ void uqueue_filter_set(uqueue *q, iomplx_item *item)
 	struct epoll_event ev;
 
 	ev.data.ptr = item;
-	ev.events = EPOLLRDHUP|EPOLLET|item->new_filter;
+	ev.events = EPOLLRDHUP|EPOLLET|item->filter;
 	if(item->oneshot)
 		ev.events |= EPOLLONESHOT;
 	epoll_ctl(q->epoll_iface, EPOLL_CTL_MOD, item->fd, &ev);
-	item->filter = item->new_filter;
-	item->new_filter = IOMPLX_NONE;
+	item->applied_filter = item->filter;
 }
 
 int accept_and_set(int sockfd, struct sockaddr *sa, unsigned int *sa_size)
