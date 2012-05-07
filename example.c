@@ -22,7 +22,6 @@ int demo_receive(iomplx_item *item)
 	if(eb->len <= 0)
 		return IOMPLX_ITEM_WOULDBLOCK;
 
-	iomplx_timeout_reset(item);
 	iomplx_item_filter_set(item, IOMPLX_WRITE);
 
 	return 0;
@@ -51,8 +50,8 @@ int demo_timeout(iomplx_item *item)
 
 int demo_disconnect(iomplx_item *item)
 {
-	free(item->data);
 	printf("DISCONNECT item->fd=%d\n", item->fd);
+	free(item->data);
 	return 0;
 }
 
@@ -62,7 +61,7 @@ int demo_accept(iomplx_item *item)
 	item->cb.ev_write = demo_send;
 	item->cb.ev_timeout = demo_timeout;
 	item->cb.ev_close = demo_disconnect;
-	item->timeout = 3;
+	item->timeout.time_limit = 3;
 	item->data = malloc(sizeof(struct echo_buffer));
 	printf("ACCEPT item->fd=%d\n", item->fd);
 	return 0;
@@ -72,8 +71,8 @@ int main()
 {
 	iomplx_instance m;
 	
-	iomplx_init(&m, NULL, 4, 4);
-	iomplx_inet_listen(&m, "0.0.0.0", 2222, demo_accept, malloc, free, NULL);
+	iomplx_init(&m, NULL, 4);
+	iomplx_inet_listen(&m, "0.0.0.0", 2223, demo_accept, malloc, free, NULL);
 	iomplx_launch(&m);
 
 	return 0;

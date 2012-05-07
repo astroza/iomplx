@@ -64,7 +64,8 @@ struct _iomplx_item {
 
 	int filter;
 	int new_filter;
-	unsigned char oneshot;
+	unsigned char oneshot:1;
+	unsigned char disabled:1;
 
 	union {
 		iomplx_callbacks cb;
@@ -74,6 +75,14 @@ struct _iomplx_item {
 			dlist guard;
 		};
 	};
+
+	struct {
+		unsigned char high:1;
+		unsigned char stage:1;
+		unsigned int time_limit;
+		unsigned int elapsed_time;
+	} timeout;
+
 	void *data;
 	union {
 		struct {
@@ -125,7 +134,8 @@ void uqueue_event_init(iomplx_waiter *);
 int uqueue_event_get(uqueue *, iomplx_waiter *, int);
 void uqueue_watch(uqueue *, iomplx_item *);
 void uqueue_unwatch(uqueue *, iomplx_item *);
-void uqueue_rewatch(uqueue *q, iomplx_item *item);
+void uqueue_enable(uqueue *q, iomplx_item *item);
+void uqueue_disable(uqueue *q, iomplx_item *item);
 void uqueue_filter_set(uqueue *, iomplx_item *);
 int accept_and_set(int, struct sockaddr *, unsigned int *);
 void iomplx_callbacks_init(iomplx_item *);
