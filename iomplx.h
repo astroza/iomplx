@@ -66,7 +66,7 @@ struct _iomplx_item {
 	int applied_filter;
 	unsigned char oneshot:1;
 	unsigned char disabled:1;
-	unsigned char closed:1;
+	unsigned char active:1;
 
 	union {
 		iomplx_callbacks cb;
@@ -133,10 +133,10 @@ typedef struct {
 void uqueue_init(uqueue *);
 void uqueue_event_init(iomplx_waiter *);
 int uqueue_event_get(uqueue *, iomplx_waiter *, int);
-void uqueue_watch(uqueue *, iomplx_item *);
-void uqueue_unwatch(uqueue *, iomplx_item *);
-void uqueue_enable(uqueue *q, iomplx_item *item);
-void uqueue_filter_set(uqueue *, iomplx_item *);
+int uqueue_watch(uqueue *, iomplx_item *);
+int uqueue_unwatch(uqueue *, iomplx_item *);
+int uqueue_enable(uqueue *q, iomplx_item *item);
+int uqueue_filter_set(uqueue *, iomplx_item *);
 int accept_and_set(int, struct sockaddr *, unsigned int *);
 void iomplx_callbacks_init(iomplx_item *);
 

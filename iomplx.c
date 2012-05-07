@@ -96,8 +96,10 @@ static void iomplx_active_list_populate(iomplx_active_list *active_list, uqueue 
 	waiter.max_events = active_list->available_item_calls;
 	do {
 		rmg = uqueue_event_get(q, &waiter, timeout);
-		if(rmg != -1)
+		if(rmg != -1) {
+			waiter.item->active = 1;
 			iomplx_active_list_call_add(active_list, waiter.item, waiter.type);
+		}
 	} while(rmg > 0);
 }
 
@@ -117,7 +119,7 @@ static inline void iomplx_item_timeout_check(uqueue *n_uqueue, iomplx_item *item
 			}
 			break;
 		case 1:
-			if(item->disabled == 0) {
+			if(item->disabled == 0 || item->active == 1) {
 				item->disabled = 1;
 				uqueue_unwatch(n_uqueue, item);
 			} else {
@@ -242,10 +244,11 @@ static void iomplx_thread_n(iomplx_instance *mplx)
 				iomplx_active_list_call_del(&active_list, item_call);
 			} else if(ret == IOMPLX_ITEM_WOULDBLOCK) {
 				if(!item->timeout.high) {
-					uqueue_enable(&mplx->n_uqueue, item);
-					item->disabled = 0;
+					if(uqueue_enable(&mplx->n_uqueue, item) == 0)
+						item->disabled = 0;
 				}
 				iomplx_active_list_call_del(&active_list, item_call);
+				item->active = 0;
 			} else if(item->filter != item->applied_filter) {
 				if(item->filter == IOMPLX_WRITE)
 					item_call->call_idx = IOMPLX_WRITE_EVENT;
@@ -263,9 +266,9 @@ void iomplx_item_add(iomplx_instance *mplx, iomplx_item *item, int listening)
 {
 	DLIST_NODE_INIT(item);
 	item->disabled = 0;
+	item->active = 0;
 	item->timeout.stage = 0;
 	item->timeout.high = 0;
-	item->closed = 0;
 	if(listening)
 		uqueue_watch(&mplx->accept_uqueue, item);
 	else

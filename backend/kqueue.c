@@ -75,35 +75,36 @@ int uqueue_event_get(uqueue *q, iomplx_waiter *waiter, int timeout)
 	return waiter->data.events_count - waiter->data.current_event - 1;
 }
 
-void uqueue_watch(uqueue *q, iomplx_item *item)
+int uqueue_watch(uqueue *q, iomplx_item *item)
 {
 	struct kevent c;
-	int ext_flags = 0;
+	int ext_flags = 0, ret;
 
 	if(item->oneshot)
 		ext_flags |= EV_ONESHOT;
 
 	EV_SET(&c, item->fd, item->filter, EV_ADD|EV_CLEAR|EV_ENABLE|EV_RECEIPT|ext_flags, 0, 0, item);
-	kevent(q->kqueue_iface, &c, 1, NULL, 0, NULL);
+	ret = kevent(q->kqueue_iface, &c, 1, NULL, 0, NULL);
 	item->applied_filter = item->filter;
+	return ret;
 }
 
-void uqueue_unwatch(uqueue *q, iomplx_item *item)
+int uqueue_unwatch(uqueue *q, iomplx_item *item)
 {
 	struct kevent c;
 
 	EV_SET(&c, item->fd, 0, EV_DELETE, 0, 0, item);
-	kevent(q->kqueue_iface, &c, 1, NULL, 0, NULL);
+	return kevent(q->kqueue_iface, &c, 1, NULL, 0, NULL);
 }
 
-void uqueue_enable(uqueue *q, iomplx_item *item)
+int uqueue_enable(uqueue *q, iomplx_item *item)
 {
-	uqueue_watch(q, item);
+	return uqueue_watch(q, item);
 }
 
-void uqueue_filter_set(uqueue *q, iomplx_item *item)
+int uqueue_filter_set(uqueue *q, iomplx_item *item)
 {
-	uqueue_watch(q, item);
+	return uqueue_watch(q, item);
 }
 
 int accept_and_set(int fd, struct sockaddr *sa, unsigned int *sa_size)
