@@ -26,6 +26,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <signal.h>
+#include <sys/ioctl.h>
 
 static void iomplx_waiter_init(iomplx_waiter *waiter)
 {
@@ -141,17 +142,20 @@ static inline void iomplx_item_timeout_check(uqueue *n_uqueue, iomplx_item *item
 	}
 }
 
-static void iomplx_do_recycle(int recycler_fd)
+static int iomplx_do_recycle(int recycler_fd)
 {
 	iomplx_item *items[IOMPLX_ITEMS_DUMP_MAX_SIZE * 4];
 	int ret, i;
-	
-	while((ret = read(recycler_fd, items, sizeof(items))) != -1) {
-		for(i = 0; i < ret/sizeof(void *); i++) {
-			printf("Calling %p to free %p\n", items[i]->parent->item_free, items[i]);
+
+	do {
+		ret = read(recycler_fd, items, sizeof(items));
+		if(ret == -1)
+			return IOMPLX_ITEM_WOULDBLOCK;
+		for(i = 0; i < ret/sizeof(void *); i++)
 			items[i]->parent->item_free(items[i]);
-		}
-	}
+	} while(1);
+
+	return 0;
 }
 
 static void iomplx_thread_0(iomplx_instance *mplx)
@@ -171,7 +175,8 @@ static void iomplx_thread_0(iomplx_instance *mplx)
 		DLIST_FOREACH(&active_list AS item_call) {
 			item = item_call->item;
 			if(item == &mplx->recycler_item) {
-				iomplx_do_recycle(item->fd);
+				if(iomplx_do_recycle(item->fd) == IOMPLX_ITEM_WOULDBLOCK)
+					iomplx_active_list_call_del(&active_list, item_call);
 				continue;
 			}
 
