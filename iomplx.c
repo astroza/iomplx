@@ -175,8 +175,10 @@ static void iomplx_thread_0(iomplx_instance *mplx)
 		DLIST_FOREACH(&active_list AS item_call) {
 			item = item_call->item;
 			if(item == &mplx->recycler_item) {
-				if(iomplx_do_recycle(item->fd) == IOMPLX_ITEM_WOULDBLOCK)
+				if(iomplx_do_recycle(item->fd) == IOMPLX_ITEM_WOULDBLOCK) {
 					iomplx_active_list_call_del(&active_list, item_call);
+					uqueue_enable(&mplx->accept_uqueue, item);
+				}
 				continue;
 			}
 
@@ -304,7 +306,7 @@ void iomplx_init(iomplx_instance *mplx, init_func init, unsigned int threads)
 	pipe(mplx->recycler);
 	ioctl(mplx->recycler[0], FIONBIO, &set);
 	mplx->recycler_item.fd = mplx->recycler[0];
-	mplx->recycler_item.oneshot = 0;
+	mplx->recycler_item.oneshot = 1;
 	iomplx_item_filter_set(&mplx->recycler_item, IOMPLX_READ);
 	iomplx_item_add(mplx, &mplx->recycler_item, 1);
 }
