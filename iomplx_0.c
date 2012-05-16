@@ -45,8 +45,8 @@ static int iomplx_do_recycle(iomplx_instance *mplx, int recycler_fd)
 		if(ret == -1)
 			return IOMPLX_ITEM_WOULDBLOCK;
 		for(i = 0; i < ret/sizeof(void *); i++) {
-			items[i]->parent->item_free(items[i]);
 			DLIST_DEL(&mplx->items_to_check, items[i]);
+			items[i]->parent->item_free(items[i]);
 		}
 
 	} while(1);
