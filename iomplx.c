@@ -85,6 +85,24 @@ void iomplx_active_list_populate(iomplx_active_list *active_list, uqueue *q, int
 	} while(rmg > 0);
 }
 
+void iomplx_items_recycle(iomplx_instance *mplx, iomplx_items_dump *dump)
+{
+	if(dump->size > 0) {
+		write(mplx->recycler[1], dump->items, dump->size * sizeof(void *));
+		dump->size = 0;
+	}
+}
+
+void iomplx_item_throw_away(iomplx_instance *mplx, iomplx_items_dump *dump, iomplx_item *item)
+{
+	if(dump->size < IOMPLX_ITEMS_DUMP_MAX_SIZE)
+		dump->items[dump->size++] = item;
+	else {
+		iomplx_items_recycle(mplx, dump);
+		iomplx_item_throw_away(mplx, dump, item);
+	}
+}
+
 void iomplx_item_add(iomplx_instance *mplx, iomplx_item *item, int listening)
 {
 	DLIST_NODE_INIT(item);

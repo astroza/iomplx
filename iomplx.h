@@ -160,6 +160,8 @@ void iomplx_active_list_init(iomplx_active_list *, unsigned int);
 int iomplx_active_list_call_add(iomplx_active_list *, iomplx_item *, unsigned char);
 void iomplx_active_list_call_del(iomplx_active_list *, iomplx_item_call *);
 void iomplx_active_list_populate(iomplx_active_list *, uqueue *, int);
+void iomplx_items_recycle(iomplx_instance *, iomplx_items_dump *);
+void iomplx_item_throw_away(iomplx_instance *, iomplx_items_dump *, iomplx_item *);
 
 /* Main functions */
 void iomplx_thread_0(iomplx_instance *);

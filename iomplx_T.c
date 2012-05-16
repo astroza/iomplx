@@ -21,7 +21,7 @@
 #include <unistd.h>
 #include <iomplx.h>
 
-static void iomplx_item_timeout_check(uqueue *n_uqueue, iomplx_item *item, unsigned long cur_time)
+static void iomplx_item_timeout_check(iomplx_instance *mplx, iomplx_item *item, unsigned long cur_time, iomplx_items_dump *dump)
 {
 	int ret;
 
@@ -32,14 +32,14 @@ static void iomplx_item_timeout_check(uqueue *n_uqueue, iomplx_item *item, unsig
 					item->timeout.high = 1;
 					item->timeout.stage = 1;
 					item->disabled = 1;
-					uqueue_unwatch(n_uqueue, item);
+					uqueue_unwatch(&mplx->n_uqueue, item);
 				}
 			}
 			break;
 		case 1:
 			if(item->disabled == 0 || item->active == 1) {
 				item->disabled = 1;
-				uqueue_unwatch(n_uqueue, item);
+				uqueue_unwatch(&mplx->n_uqueue, item);
 			} else {
 				ret = item->cb.ev_timeout(item);
 				if(ret == 0) {
@@ -47,11 +47,12 @@ static void iomplx_item_timeout_check(uqueue *n_uqueue, iomplx_item *item, unsig
 					item->timeout.start_time = cur_time;
 					item->timeout.stage = 0;
 					item->disabled = 0;
-					uqueue_watch(n_uqueue, item);
+					uqueue_watch(&mplx->n_uqueue, item);
 				} else {
 					item->cb.ev_close(item);
 					close(item->fd);
 					item->closed = 1;
+					iomplx_item_throw_away(mplx, dump, item);
 				}
 			}
 			break;
@@ -62,6 +63,9 @@ void iomplx_thread_T(iomplx_instance *mplx)
 {
 	iomplx_item *item;
 	int sleep_time = 0;
+	iomplx_items_dump dump;
+	
+	iomplx_items_dump_init(&dump);
 	do {
 		if(sleep_time < IOMPLX_MAINTENANCE_PERIOD)
 			sleep_time = IOMPLX_MAINTENANCE_PERIOD;
@@ -72,9 +76,10 @@ void iomplx_thread_T(iomplx_instance *mplx)
 			if(item->closed)
 				continue;
 
-			iomplx_item_timeout_check(&mplx->n_uqueue, item, time(NULL));
+			iomplx_item_timeout_check(mplx, item, time(NULL), &dump);
 			if(item->timeout.time_limit > 0 && item->timeout.time_limit < sleep_time)
 				sleep_time = item->timeout.time_limit;
 		}
+		iomplx_items_recycle(mplx, &dump);
 	} while(1);
 }

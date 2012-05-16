@@ -21,24 +21,6 @@
 #include <signal.h>
 #include <iomplx.h>
 
-static void iomplx_items_recycle(iomplx_instance *mplx, iomplx_items_dump *dump)
-{
-	if(dump->size > 0) {
-		write(mplx->recycler[1], dump->items, dump->size * sizeof(void *));
-		dump->size = 0;
-	}
-}
-
-static void iomplx_item_throw_away(iomplx_instance *mplx, iomplx_items_dump *dump, iomplx_item *item)
-{
-	if(dump->size < IOMPLX_ITEMS_DUMP_MAX_SIZE)
-		dump->items[dump->size++] = item;
-	else {
-		iomplx_items_recycle(mplx, dump);
-		iomplx_item_throw_away(mplx, dump, item);
-	}
-}
-
 void iomplx_thread_N(iomplx_instance *mplx)
 {
 	iomplx_active_list active_list;
