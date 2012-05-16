@@ -154,6 +154,16 @@ void iomplx_item_add(iomplx_instance *, iomplx_item *, int);
 void iomplx_init(iomplx_instance *, init_func, unsigned int);
 void iomplx_launch(iomplx_instance *);
 
+void iomplx_active_list_init(iomplx_active_list *, unsigned int);
+int iomplx_active_list_call_add(iomplx_active_list *, iomplx_item *, unsigned char);
+void iomplx_active_list_call_del(iomplx_active_list *, iomplx_item_call *);
+void iomplx_active_list_populate(iomplx_active_list *, uqueue *, int);
+
+/* Main functions */
+void iomplx_thread_0(iomplx_instance *);
+void iomplx_thread_N(iomplx_instance *);
+void iomplx_thread_T(iomplx_instance *);
+
 static inline void iomplx_item_filter_set(iomplx_item *item, int filter)
 {
         item->filter = filter;

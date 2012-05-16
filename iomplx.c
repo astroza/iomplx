@@ -17,16 +17,10 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-#include <pthread.h>
-#include <sys/types.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <string.h>
-#include <iomplx.h>
-#include <time.h>
 #include <unistd.h>
-#include <signal.h>
+#include <pthread.h>
 #include <sys/ioctl.h>
+#include <iomplx.h>
 
 static void iomplx_waiter_init(iomplx_waiter *waiter)
 {
@@ -34,28 +28,14 @@ static void iomplx_waiter_init(iomplx_waiter *waiter)
 	uqueue_event_init(waiter);
 }
 
-static int iomplx_dummy_call1(iomplx_item *item)
-{
-	return 0;
-}
-
-static const iomplx_callbacks iomplx_dummy_calls = {
-	.calls_arr = {iomplx_dummy_call1, iomplx_dummy_call1, iomplx_dummy_call1, iomplx_dummy_call1, iomplx_dummy_call1}
-};
-
-void iomplx_callbacks_init(iomplx_item *item)
-{
-	memcpy(&item->cb, &iomplx_dummy_calls, sizeof(iomplx_callbacks));
-}
-
-static void iomplx_active_list_init(iomplx_active_list *active_list, unsigned int calls_number)
+void iomplx_active_list_init(iomplx_active_list *active_list, unsigned int calls_number)
 {
 	DLIST_INIT(active_list);
 	mempool_init(&active_list->item_calls_pool, sizeof(iomplx_item_call), calls_number);
 	active_list->available_item_calls = calls_number;
 }
 
-static int iomplx_active_list_call_add(iomplx_active_list *active_list, iomplx_item *item, unsigned char call_idx)
+int iomplx_active_list_call_add(iomplx_active_list *active_list, iomplx_item *item, unsigned char call_idx)
 {
 	iomplx_item_call *item_call;
 
@@ -72,14 +52,14 @@ static int iomplx_active_list_call_add(iomplx_active_list *active_list, iomplx_i
 	return 0;
 }
 
-static void iomplx_active_list_call_del(iomplx_active_list *active_list, iomplx_item_call *call)
+void iomplx_active_list_call_del(iomplx_active_list *active_list, iomplx_item_call *call)
 {
 	DLIST_DEL(active_list, call);
 	mempool_free(&active_list->item_calls_pool, call);
 	active_list->available_item_calls++;
 }
 
-static void iomplx_active_list_populate(iomplx_active_list *active_list, uqueue *q, int wait_timeout)
+void iomplx_active_list_populate(iomplx_active_list *active_list, uqueue *q, int wait_timeout)
 {
 	int timeout;
 	int rmg;
@@ -103,180 +83,6 @@ static void iomplx_active_list_populate(iomplx_active_list *active_list, uqueue 
 			iomplx_active_list_call_add(active_list, waiter.item, waiter.type);
 		}
 	} while(rmg > 0);
-}
-
-static inline void iomplx_item_timeout_check(uqueue *n_uqueue, iomplx_item *item, unsigned long cur_time)
-{
-	int ret;
-
-	switch(item->timeout.stage) {
-		case 0:
-			if(item->timeout.time_limit > 0) {
-				if(cur_time - item->timeout.start_time >= item->timeout.time_limit) {
-					item->timeout.high = 1;
-					item->timeout.stage = 1;
-					item->disabled = 1;
-					uqueue_unwatch(n_uqueue, item);
-				}
-			}
-			break;
-		case 1:
-			if(item->disabled == 0 || item->active == 1) {
-				item->disabled = 1;
-				uqueue_unwatch(n_uqueue, item);
-			} else {
-				ret = item->cb.ev_timeout(item);
-				if(ret == 0) {
-					item->timeout.high = 0;
-					item->timeout.start_time = time(NULL);
-					item->timeout.stage = 0;
-					item->disabled = 0;
-					uqueue_watch(n_uqueue, item);
-				} else {
-					item->cb.ev_close(item);
-					close(item->fd);
-					item->fd = -1;
-				}
-			}
-			break;
-	}
-}
-
-static int iomplx_do_recycle(int recycler_fd)
-{
-	iomplx_item *items[IOMPLX_ITEMS_DUMP_MAX_SIZE * 4];
-	int ret, i;
-
-	do {
-		ret = read(recycler_fd, items, sizeof(items));
-		if(ret == -1)
-			return IOMPLX_ITEM_WOULDBLOCK;
-		for(i = 0; i < ret/sizeof(void *); i++)
-			items[i]->parent->item_free(items[i]);
-	} while(1);
-
-	return 0;
-}
-
-static void iomplx_thread_0(iomplx_instance *mplx)
-{
-	iomplx_item *item, *new_item;
-	iomplx_item_call *item_call;
-	iomplx_active_list active_list;
-	struct sockaddr sa;
-	socklen_t sa_size;
-	int fd;
-
-	iomplx_active_list_init(&active_list, mplx->active_list_size[THREAD_0]);
-
-	do {
-		iomplx_active_list_populate(&active_list, &mplx->accept_uqueue, -1);
-
-		DLIST_FOREACH(&active_list AS item_call) {
-			item = item_call->item;
-			if(item == &mplx->recycler_item) {
-				if(iomplx_do_recycle(item->fd) == IOMPLX_ITEM_WOULDBLOCK) {
-					iomplx_active_list_call_del(&active_list, item_call);
-					uqueue_enable(&mplx->accept_uqueue, item);
-				}
-				continue;
-			}
-
-			sa_size = item->sa_size;
-			fd = accept_and_set(item->fd, &sa, &sa_size);
-			if(fd == -1) {
-				iomplx_active_list_call_del(&active_list, item_call);
-				continue;
-			}
-
-			if(!(new_item = item->item_alloc(sizeof(iomplx_item))))
-				close(fd);
-			else {
-				iomplx_callbacks_init(new_item);
-				new_item->fd = fd;
-				new_item->filter = IOMPLX_READ;
-				new_item->sa = sa;
-				new_item->sa_size = sa_size;
-				new_item->oneshot = 1;
-				new_item->parent = item;
-				if(item->cb.ev_accept(new_item) < 0) {
-					item->item_free(new_item);
-					close(fd);
-				} else
-					iomplx_item_add(mplx, new_item, 0);
-			}
-		}
-	} while(1);
-}
-
-static void iomplx_items_recycle(iomplx_instance *mplx, iomplx_items_dump *dump)
-{
-	if(dump->size > 0) {
-		write(mplx->recycler[1], dump->items, dump->size * sizeof(void *));
-		dump->size = 0;
-	}
-}
-
-static void iomplx_item_throw_away(iomplx_instance *mplx, iomplx_items_dump *dump, iomplx_item *item)
-{
-	if(dump->size < IOMPLX_ITEMS_DUMP_MAX_SIZE)
-		dump->items[dump->size++] = item;
-	else {
-		iomplx_items_recycle(mplx, dump);
-		iomplx_item_throw_away(mplx, dump, item);
-	}
-}
-
-static void iomplx_thread_n(iomplx_instance *mplx)
-{
-	iomplx_active_list active_list;
-	iomplx_item_call *item_call;
-	iomplx_items_dump dump;
-	iomplx_item *item;
-	int ret;
-
-	signal(SIGPIPE, SIG_IGN);
-	if(mplx->thread_init)
-		mplx->thread_init();
-
-	iomplx_active_list_init(&active_list, mplx->active_list_size[THREAD_N]);
-	iomplx_items_dump_init(&dump);
-
-	do {
-		iomplx_items_recycle(mplx, &dump);
-		iomplx_active_list_populate(&active_list, &mplx->n_uqueue, -1);
-
-		DLIST_FOREACH(&active_list AS item_call) {
-			item = item_call->item;
-			ret = item->cb.calls_arr[item_call->call_idx](item);
-
-			if(ret == IOMPLX_ITEM_CLOSE && item_call->call_idx != IOMPLX_CLOSE_EVENT)  {
-				item_call->call_idx = IOMPLX_CLOSE_EVENT;
-				continue;
-			}
-
-			if(item_call->call_idx == IOMPLX_CLOSE_EVENT) {
-				close(item->fd);
-				iomplx_active_list_call_del(&active_list, item_call);
-				iomplx_item_throw_away(mplx, &dump, item);
-			} else if(ret == IOMPLX_ITEM_WOULDBLOCK) {
-				if(!item->timeout.high) {
-					if(uqueue_enable(&mplx->n_uqueue, item) == 0)
-						item->disabled = 0;
-				}
-				iomplx_active_list_call_del(&active_list, item_call);
-				item->active = 0;
-			} else if(item->filter != item->applied_filter) {
-				if(item->filter == IOMPLX_WRITE)
-					item_call->call_idx = IOMPLX_WRITE_EVENT;
-				else if(item->filter == IOMPLX_READ)
-					item_call->call_idx = IOMPLX_READ_EVENT;
-
-				item->applied_filter = item->filter;
-			}
-		}
-
-	} while(1);
 }
 
 void iomplx_item_add(iomplx_instance *mplx, iomplx_item *item, int listening)
@@ -321,7 +127,7 @@ static void iomplx_start_threads(iomplx_instance *mplx)
 	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
 
 	for(i = 0; i < mplx->threads; i++)
-		pthread_create(&unused, &attr, (void *(*)(void *))iomplx_thread_n, (void *)mplx);
+		pthread_create(&unused, &attr, (void *(*)(void *))iomplx_thread_N, (void *)mplx);
 }
 
 void iomplx_launch(iomplx_instance *mplx)
