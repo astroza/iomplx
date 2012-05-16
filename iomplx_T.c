@@ -17,6 +17,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
+#include <time.h>
 #include <unistd.h>
 #include <iomplx.h>
 
@@ -43,16 +44,37 @@ static void iomplx_item_timeout_check(uqueue *n_uqueue, iomplx_item *item, unsig
 				ret = item->cb.ev_timeout(item);
 				if(ret == 0) {
 					item->timeout.high = 0;
-					item->timeout.start_time = time(NULL);
+					item->timeout.start_time = cur_time;
 					item->timeout.stage = 0;
 					item->disabled = 0;
 					uqueue_watch(n_uqueue, item);
 				} else {
 					item->cb.ev_close(item);
 					close(item->fd);
-					item->fd = -1;
+					item->closed = 1;
 				}
 			}
 			break;
 	}
+}
+
+void iomplx_thread_T(iomplx_instance *mplx)
+{
+	iomplx_item *item;
+	int sleep_time = 0;
+	do {
+		if(sleep_time < IOMPLX_MAINTENANCE_PERIOD)
+			sleep_time = IOMPLX_MAINTENANCE_PERIOD;
+
+		sleep(sleep_time);
+
+		DLIST_FOREACH(&mplx->items_to_check AS item) {
+			if(item->closed)
+				continue;
+
+			iomplx_item_timeout_check(&mplx->n_uqueue, item, time(NULL));
+			if(item->timeout.time_limit > 0 && item->timeout.time_limit < sleep_time)
+				sleep_time = item->timeout.time_limit;
+		}
+	} while(1);
 }

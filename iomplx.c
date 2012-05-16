@@ -92,6 +92,7 @@ void iomplx_item_add(iomplx_instance *mplx, iomplx_item *item, int listening)
 	item->active = 0;
 	item->timeout.stage = 0;
 	item->timeout.high = 0;
+	item->closed = 0;
 	if(listening)
 		uqueue_watch(&mplx->accept_uqueue, item);
 	else
@@ -115,6 +116,7 @@ void iomplx_init(iomplx_instance *mplx, init_func init, unsigned int threads)
 	mplx->recycler_item.oneshot = 1;
 	iomplx_item_filter_set(&mplx->recycler_item, IOMPLX_READ);
 	iomplx_item_add(mplx, &mplx->recycler_item, 1);
+	DLIST_INIT(&mplx->items_to_check);
 }
 
 static void iomplx_start_threads(iomplx_instance *mplx)
@@ -128,6 +130,8 @@ static void iomplx_start_threads(iomplx_instance *mplx)
 
 	for(i = 0; i < mplx->threads; i++)
 		pthread_create(&unused, &attr, (void *(*)(void *))iomplx_thread_N, (void *)mplx);
+
+	pthread_create(&unused, &attr, (void *(*)(void *))iomplx_thread_T, (void *)mplx);
 }
 
 void iomplx_launch(iomplx_instance *mplx)

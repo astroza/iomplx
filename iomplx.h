@@ -67,6 +67,7 @@ struct _iomplx_item {
 	unsigned char oneshot:1;
 	unsigned char disabled:1;
 	unsigned char active:1;
+	unsigned char closed:1;
 
 	union {
 		iomplx_callbacks cb;
@@ -114,6 +115,7 @@ typedef struct {
 	init_func thread_init;
 	int recycler[2];
 	iomplx_item recycler_item;
+	dlist items_to_check;
 } iomplx_instance;
 
 typedef struct {

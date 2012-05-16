@@ -35,7 +35,7 @@ void iomplx_callbacks_init(iomplx_item *item)
 	memcpy(&item->cb, &iomplx_dummy_calls, sizeof(iomplx_callbacks));
 }
 
-static int iomplx_do_recycle(int recycler_fd)
+static int iomplx_do_recycle(iomplx_instance *mplx, int recycler_fd)
 {
 	iomplx_item *items[IOMPLX_ITEMS_DUMP_MAX_SIZE * 4];
 	int ret, i;
@@ -44,8 +44,11 @@ static int iomplx_do_recycle(int recycler_fd)
 		ret = read(recycler_fd, items, sizeof(items));
 		if(ret == -1)
 			return IOMPLX_ITEM_WOULDBLOCK;
-		for(i = 0; i < ret/sizeof(void *); i++)
+		for(i = 0; i < ret/sizeof(void *); i++) {
 			items[i]->parent->item_free(items[i]);
+			DLIST_DEL(&mplx->items_to_check, items[i]);
+		}
+
 	} while(1);
 
 	return 0;
@@ -68,7 +71,7 @@ void iomplx_thread_0(iomplx_instance *mplx)
 		DLIST_FOREACH(&active_list AS item_call) {
 			item = item_call->item;
 			if(item == &mplx->recycler_item) {
-				if(iomplx_do_recycle(item->fd) == IOMPLX_ITEM_WOULDBLOCK) {
+				if(iomplx_do_recycle(mplx, item->fd) == IOMPLX_ITEM_WOULDBLOCK) {
 					iomplx_active_list_call_del(&active_list, item_call);
 					uqueue_enable(&mplx->accept_uqueue, item);
 				}
@@ -95,8 +98,10 @@ void iomplx_thread_0(iomplx_instance *mplx)
 				if(item->cb.ev_accept(new_item) < 0) {
 					item->item_free(new_item);
 					close(fd);
-				} else
+				} else {
 					iomplx_item_add(mplx, new_item, 0);
+					DLIST_APPEND(&mplx->items_to_check, new_item);
+				}
 			}
 		}
 	} while(1);

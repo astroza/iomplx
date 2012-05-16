@@ -6,6 +6,9 @@ SRC= \
     dlist.c \
     mempool.c \
     iomplx.c \
+    iomplx_0.c \
+    iomplx_N.c \
+    iomplx_T.c \
     iomplx_inet.c
 
 UQUEUE=NOUQUEUE

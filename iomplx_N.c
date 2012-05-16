@@ -69,6 +69,7 @@ void iomplx_thread_N(iomplx_instance *mplx)
 
 			if(item_call->call_idx == IOMPLX_CLOSE_EVENT) {
 				close(item->fd);
+				item->closed = 1;
 				iomplx_active_list_call_del(&active_list, item_call);
 				iomplx_item_throw_away(mplx, &dump, item);
 			} else if(ret == IOMPLX_ITEM_WOULDBLOCK) {
