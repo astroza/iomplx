@@ -45,8 +45,10 @@ void iomplx_thread_N(iomplx_instance *mplx)
 			ret = item->cb.calls_arr[item_call->call_idx](item);
 
 			if(ret == IOMPLX_ITEM_CLOSE && item_call->call_idx != IOMPLX_CLOSE_EVENT)  {
-				item_call->call_idx = IOMPLX_CLOSE_EVENT;
-				continue;
+				//item_call->call_idx = IOMPLX_CLOSE_EVENT;
+				shutdown(item->fd, SHUT_RDWR);
+				ret = IOMPLX_ITEM_WOULDBLOCK;
+				item_call->call_idx = -1;
 			}
 
 			if(item_call->call_idx == IOMPLX_CLOSE_EVENT) {
