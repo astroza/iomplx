@@ -45,7 +45,7 @@ int demo_send(iomplx_item *item)
 int demo_timeout(iomplx_item *item)
 {
 	printf("TIMEOUT item->fd=%d\n", item->fd);
-	return -1;
+	return IOMPLX_ITEM_CLOSE;
 }
 
 int demo_disconnect(iomplx_item *item)
@@ -61,7 +61,7 @@ int demo_accept(iomplx_item *item)
 	item->cb.ev_write = demo_send;
 	item->cb.ev_timeout = demo_timeout;
 	item->cb.ev_close = demo_disconnect;
-	item->timeout.time_limit = 3;
+	iomplx_item_timeout_set(item, 3);
 	item->data = malloc(sizeof(struct echo_buffer));
 	printf("ACCEPT item->fd=%d\n", item->fd);
 	return 0;

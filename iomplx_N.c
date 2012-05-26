@@ -21,13 +21,38 @@
 #include <signal.h>
 #include <iomplx.h>
 
+static inline int iomplx_item_do_callback(iomplx_item_call *item_call)
+{
+	int item_ret;
+	iomplx_item *item;
+
+	item = item_call->item;
+	item_ret = item->cb.calls_arr[item_call->call_idx](item);
+	if(item_call->call_idx == IOMPLX_CLOSE_EVENT)
+		return 0;
+	else {
+		if(item_ret == IOMPLX_ITEM_CLOSE) {
+			item_call->call_idx = IOMPLX_CLOSE_EVENT;
+			return 2;
+		} else if(item_ret == IOMPLX_ITEM_WOULDBLOCK)
+			return 1;
+		else if(item->filter != item->applied_filter) {
+			if(item->filter == IOMPLX_WRITE)
+				item_call->call_idx = IOMPLX_WRITE_EVENT;
+			else if(item->filter == IOMPLX_READ)
+				item_call->call_idx = IOMPLX_READ_EVENT;
+			item->applied_filter = item->filter;
+		}
+	}
+	return 2;
+}
+
 void iomplx_thread_N(iomplx_instance *mplx)
 {
 	iomplx_active_list active_list;
 	iomplx_item_call *item_call;
 	iomplx_items_dump dump;
 	iomplx_item *item;
-	int item_state;
 
 	signal(SIGPIPE, SIG_IGN);
 	if(mplx->thread_init)
@@ -42,34 +67,22 @@ void iomplx_thread_N(iomplx_instance *mplx)
 
 		DLIST_FOREACH(&active_list AS item_call) {
 			item = item_call->item;
-			item_state = item->cb.calls_arr[item_call->call_idx](item);
-
-			if(item_state == IOMPLX_ITEM_CLOSE && item_call->call_idx != IOMPLX_CLOSE_EVENT)  {
-				item_call->call_idx = IOMPLX_CLOSE_EVENT;
-				continue;
-			}
-
-			if(item_call->call_idx == IOMPLX_CLOSE_EVENT) {
-				close(item->fd);
-				item->closed = 1;
-				iomplx_active_list_call_del(&active_list, item_call);
-				iomplx_item_throw_away(mplx, &dump, item);
-			} else if(item_state == IOMPLX_ITEM_WOULDBLOCK) {
-				if(!item->timeout.high) {
-					if(uqueue_enable(&mplx->n_uqueue, item) == 0)
-						item->disabled = 0;
-				}
-				iomplx_active_list_call_del(&active_list, item_call);
-				item->active = 0;
-			} else if(item->filter != item->applied_filter) {
-				if(item->filter == IOMPLX_WRITE)
-					item_call->call_idx = IOMPLX_WRITE_EVENT;
-				else if(item->filter == IOMPLX_READ)
-					item_call->call_idx = IOMPLX_READ_EVENT;
-
-				item->applied_filter = item->filter;
+			switch(iomplx_item_do_callback(item_call)) {
+				case 0: /* Close */
+					close(item->fd);
+					item->closed = 1;
+					iomplx_active_list_call_del(&active_list, item_call);
+					iomplx_item_throw_away(mplx, &dump, item);
+					break;
+				case 1: /* Back to n_uqueue */
+					if(!item->timeout.high) {
+						if(uqueue_enable(&mplx->n_uqueue, item) == 0)
+							item->disabled = 0;
+					}
+					iomplx_active_list_call_del(&active_list, item_call);
+					item->active = 0;
+					break;
 			}
 		}
-
 	} while(1);
 }
