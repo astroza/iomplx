@@ -27,7 +27,7 @@ void iomplx_thread_N(iomplx_instance *mplx)
 	iomplx_item_call *item_call;
 	iomplx_items_dump dump;
 	iomplx_item *item;
-	int ret;
+	int item_state;
 
 	signal(SIGPIPE, SIG_IGN);
 	if(mplx->thread_init)
@@ -42,9 +42,9 @@ void iomplx_thread_N(iomplx_instance *mplx)
 
 		DLIST_FOREACH(&active_list AS item_call) {
 			item = item_call->item;
-			ret = item->cb.calls_arr[item_call->call_idx](item);
+			item_state = item->cb.calls_arr[item_call->call_idx](item);
 
-			if(ret == IOMPLX_ITEM_CLOSE && item_call->call_idx != IOMPLX_CLOSE_EVENT)  {
+			if(item_state == IOMPLX_ITEM_CLOSE && item_call->call_idx != IOMPLX_CLOSE_EVENT)  {
 				item_call->call_idx = IOMPLX_CLOSE_EVENT;
 				continue;
 			}
@@ -54,7 +54,7 @@ void iomplx_thread_N(iomplx_instance *mplx)
 				item->closed = 1;
 				iomplx_active_list_call_del(&active_list, item_call);
 				iomplx_item_throw_away(mplx, &dump, item);
-			} else if(ret == IOMPLX_ITEM_WOULDBLOCK) {
+			} else if(item_state == IOMPLX_ITEM_WOULDBLOCK) {
 				if(!item->timeout.high) {
 					if(uqueue_enable(&mplx->n_uqueue, item) == 0)
 						item->disabled = 0;
