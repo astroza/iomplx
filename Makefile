@@ -1,6 +1,6 @@
 CC=gcc
 CFLAGS=-Wall -g
-INCLUDE=-I.
+include config.mk
 
 SRC= \
     dlist.c \
@@ -10,16 +10,6 @@ SRC= \
     iomplx_N.c \
     iomplx_T.c \
     iomplx_inet.c
-
-UQUEUE=NOUQUEUE
-
-ifneq ($(findstring /usr/include/sys/epoll.h, $(wildcard /usr/include/sys/*.h)), )
-	UQUEUE=EPOLL
-endif
-
-ifneq ($(findstring /usr/include/sys/event.h, $(wildcard /usr/include/sys/*.h)), )
-	UQUEUE=KQUEUE
-endif
 
 UQUEUE_SRC=backend/$(shell echo $(UQUEUE) | tr A-Z a-z).c
 SRC+=$(UQUEUE_SRC)

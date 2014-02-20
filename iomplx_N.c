@@ -75,12 +75,9 @@ void iomplx_thread_N(iomplx_instance *mplx)
 					iomplx_item_throw_away(mplx, &dump, item);
 					break;
 				case 1: /* Back to n_uqueue */
-					if(!item->timeout.high) {
-						if(uqueue_enable(&mplx->n_uqueue, item) == 0)
-							item->disabled = 0;
-					}
+					if(item->oneshot)
+						uqueue_enable(&mplx->n_uqueue, item);
 					iomplx_active_list_call_del(&active_list, item_call);
-					item->active = 0;
 					break;
 			}
 		}

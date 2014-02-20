@@ -22,6 +22,7 @@
 #include <mempool.h>
 #include <sys/socket.h>
 #include <time.h>
+#include <pthread.h>
 
 #define IOMPLX_MAX_ACTIVE_ITEMS 	200
 #define IOMPLX_MAINTENANCE_PERIOD 	4	/* Seconds */
@@ -78,8 +79,7 @@ struct _iomplx_item {
 	};
 
 	struct {
-		unsigned char high:1;
-		unsigned char stage:2;
+		pthread_mutex_t lock;
 		unsigned int time_limit;
 		unsigned int start_time;
 	} timeout;

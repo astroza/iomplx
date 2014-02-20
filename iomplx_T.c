@@ -23,39 +23,14 @@
 
 static void iomplx_item_timeout_check(iomplx_instance *mplx, iomplx_item *item, unsigned long cur_time, iomplx_items_dump *dump)
 {
-	int ret;
-
-	switch(item->timeout.stage) {
-		case 0:
-			if(item->timeout.time_limit > 0) {
-				if(cur_time - item->timeout.start_time >= item->timeout.time_limit) {
-					item->timeout.high = 1;
-					item->timeout.stage = 1;
-					item->disabled = 1;
-					uqueue_unwatch(&mplx->n_uqueue, item);
-				}
-			}
-			break;
-		case 1:
-			if(item->disabled == 0 || item->active == 1) {
-				item->disabled = 1;
-				uqueue_unwatch(&mplx->n_uqueue, item);
-			} else {
-				ret = item->cb.ev_timeout(item);
-				if(ret == 0) {
-					item->timeout.high = 0;
-					item->timeout.start_time = cur_time;
-					item->timeout.stage = 0;
-					item->disabled = 0;
-					uqueue_watch(&mplx->n_uqueue, item);
-				} else {
-					item->cb.ev_close(item);
-					close(item->fd);
-					item->closed = 1;
-					iomplx_item_throw_away(mplx, dump, item);
-				}
-			}
-			break;
+	if(item->timeout.time_limit > 0 && pthread_mutex_trylock(&item->timeout.lock) == 0) {
+		if(cur_time - item->timeout.start_time >= item->timeout.time_limit) {
+			item->cb.ev_timeout(item);
+			item->cb.ev_close(item);
+			close(item->fd);
+			iomplx_item_throw_away(mplx, dump, item);
+		}
+		pthread_mutex_unlock(&item->timeout.lock);
 	}
 }
 

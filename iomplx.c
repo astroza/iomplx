@@ -21,6 +21,7 @@
 #include <pthread.h>
 #include <sys/ioctl.h>
 #include <iomplx.h>
+#include <stdio.h>
 
 static void iomplx_waiter_init(iomplx_waiter *waiter)
 {
@@ -38,6 +39,13 @@ void iomplx_active_list_init(iomplx_active_list *active_list, unsigned int calls
 int iomplx_active_list_call_add(iomplx_active_list *active_list, iomplx_item *item, unsigned char call_idx)
 {
 	iomplx_item_call *item_call;
+
+	/* Is it timeouted? */
+	if(pthread_mutex_trylock(&item->timeout.lock) != 0)
+		return -1;
+
+	/* Refresh the timeout counter */
+	item->timeout.start_time = time(NULL);
 
 	item_call = mempool_alloc(&active_list->item_calls_pool);
 	if(!item_call)
@@ -57,6 +65,9 @@ void iomplx_active_list_call_del(iomplx_active_list *active_list, iomplx_item_ca
 	DLIST_DEL(active_list, call);
 	mempool_free(&active_list->item_calls_pool, call);
 	active_list->available_item_calls++;
+
+	/* It can timeout now */
+	pthread_mutex_unlock(&call->item->timeout.lock);
 }
 
 void iomplx_active_list_populate(iomplx_active_list *active_list, uqueue *q, int wait_timeout)
@@ -70,17 +81,22 @@ void iomplx_active_list_populate(iomplx_active_list *active_list, uqueue *q, int
 
 	iomplx_waiter_init(&waiter);
 
+	/* We won't wait an item if the list is already populated
+	 */
 	if(DLIST_ISEMPTY(active_list))
 		timeout = wait_timeout;
 	else
 		timeout = 0;
 
+	/* We say to waiter that there is a limited space for item_calls
+	 */
 	uqueue_max_events_set(&waiter, active_list->available_item_calls);
 	do {
 		rmg = uqueue_event_get(q, &waiter, timeout);
 		if(rmg != -1) {
-			waiter.item->active = 1;
-			iomplx_active_list_call_add(active_list, waiter.item, waiter.type);
+			if(iomplx_active_list_call_add(active_list, waiter.item, waiter.type) == -1) {
+				fprintf(stdout, "Can't add item->fd=%d to active_list(%p)\n", waiter.item->fd, active_list);
+			}
 		}
 	} while(rmg > 0);
 }
@@ -95,6 +111,7 @@ void iomplx_items_recycle(iomplx_instance *mplx, iomplx_items_dump *dump)
 
 void iomplx_item_throw_away(iomplx_instance *mplx, iomplx_items_dump *dump, iomplx_item *item)
 {
+	pthread_mutex_destroy(&item->timeout.lock);
 	if(dump->size < IOMPLX_ITEMS_DUMP_MAX_SIZE)
 		dump->items[dump->size++] = item;
 	else {
@@ -106,11 +123,8 @@ void iomplx_item_throw_away(iomplx_instance *mplx, iomplx_items_dump *dump, iomp
 void iomplx_item_add(iomplx_instance *mplx, iomplx_item *item, int listening)
 {
 	DLIST_NODE_INIT(item);
-	item->disabled = 0;
-	item->active = 0;
-	item->timeout.stage = 0;
-	item->timeout.high = 0;
 	item->closed = 0;
+	pthread_mutex_init(&item->timeout.lock, NULL);
 	if(listening)
 		uqueue_watch(&mplx->accept_uqueue, item);
 	else
