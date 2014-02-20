@@ -1,0 +1,32 @@
+#!/bin/sh
+
+# Linux
+
+INCLUDE="-I."
+UQUEUE=""
+
+if [ -f /usr/include/sys/epoll.h ]; then
+	UQUEUE=EPOLL
+# OSX
+elif [ -f /usr/bin/xcrun ]; then
+	SDK_PATH=$(xcrun --show-sdk-path)	
+	if [ -f "$SDK_PATH/usr/include/sys/event.h" ]; then
+		UQUEUE=KQUEUE
+		INCLUDE+=" -I$SDK_PATH"
+	fi
+# BSD
+elif [ -f /usr/include/sys/event.h ]; then
+	UQUEUE=KQUEUE
+fi
+
+if [ -z "$UQUEUE" ]; then
+	echo "There is no uqueue mechanism avaiable (epoll, kqueue)"
+	exit 1
+else
+cat << __EOF__ > config.mk
+UQUEUE=$UQUEUE
+INCLUDE=$INCLUDE
+__EOF__
+	echo "config.mk done"
+fi
+
